@@ -3,10 +3,12 @@
 [![check](https://github.com/khalido/fx-agent-action/actions/workflows/check.yml/badge.svg)](https://github.com/khalido/fx-agent-action/actions/workflows/check.yml)
 
 An agent on your issues. Open one and [fx](https://fx.sh), Vercel Labs'
-coding agent, leaves a short note after reading the code. Comment `/fx` with a
-question and it answers. `/fx pr …` gets a draft pull request. It runs in your
-own runner, no app to install, no service in the middle, and posts one comment
-that it edits rather than a new one per run.
+coding agent, reads the code and leaves a note: where this lives, what is
+already there, and the answer itself when the issue turns out to be a
+question. Comment `/fx` with a question and it answers. `/fx pr …` gets a
+draft pull request. It runs in your own runner, no app to install, no service
+in the middle, and posts one comment that it edits rather than a new one per
+run.
 
 ```yaml
 # .github/workflows/fx.yml

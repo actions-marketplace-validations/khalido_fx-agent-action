@@ -161,6 +161,28 @@ front of a built-in task gives the model two output shapes to reconcile, and
 a file of pure repo facts is what `AGENTS.md` already is. Gemini's second
 opinion talked this repo out of a `.github/fx/about.md`; the reasoning held.
 
+**The note asks for a head start, not a filled-in form.** The first version
+named seven bold labels — Where, Already here, Related, Likely cause, Before
+starting, Check with, Outside — and every note came back with all seven,
+including the ones with nothing behind them (`Check with: npm run check`, on
+every issue, forever). Content collapsed into a path index with no sentence
+saying what the issue was. So the labels are gone: open with the answer, then
+whatever this issue needs, a table when three or more things are being
+compared, and the one or two files someone should actually open. A note may
+also *be* the answer — "can this codebase already do X" is a question a run
+with a shell and a web search can settle, and settling it beats pointing at
+where someone else could look. The model is assumed to have judgement; the
+prompt spends its words on what the note is for. Two things it still spells
+out, because models get both wrong unprompted: no preamble of any kind (the
+first sentence written is the first sentence posted), and a length, since
+"answer it properly" without a ceiling produces a report. The no-preamble
+rule is deliberately in two places, the base block and the note prompt, and
+that is not an oversight to tidy: with it only in the base block a test run
+opened "The evidence is in. Writing the note."; with both, three runs opened
+on the substance. Everything else generic — tables, naming files, labelling
+a guess — is in the base block alone, where it reaches a repo's own
+`.github/fx/issue.md` too.
+
 **Skills ship in the action and are copied, not discovered.** fx finds skills
 from the workspace upward and in `~/.fx/skills/`; the action's checkout under
 `_actions/` is neither, so `action.yml` copies `skills/` there before the run,

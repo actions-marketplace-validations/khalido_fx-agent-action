@@ -1,8 +1,10 @@
 # The one file to copy into a repo. One job, three things:
 #
-#   an issue is opened or edited  → one short note from something that has read
-#                                   the code and its history, refreshed in place
-#                                   when the issue changes
+#   an issue is opened or edited  → a note from something that has read the
+#                                   code and its history — where this lives,
+#                                   what is already there, or the answer when
+#                                   the issue is a question. Refreshed in
+#                                   place when the issue changes
 #   /fx <question>                → an answer, read-only with a scratch shell,
 #                                   on any issue or PR
 #   /fx pr <what to build>        → a draft pull request

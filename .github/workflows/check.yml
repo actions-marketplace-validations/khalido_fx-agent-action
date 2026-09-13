@@ -52,7 +52,7 @@ jobs:
           export GITHUB_EVENT_NAME=issues GITHUB_EVENT_PATH="$RUNNER_TEMP/event.json"
           echo '{"action":"opened"}' > "$GITHUB_EVENT_PATH"
           INPUT_PROMPT_FILE=.github/fx/issue.md bash scripts/build-prompt.sh
-          grep -q 'Already here' "$RUNNER_TEMP/fx-prompt.md"
+          grep -q 'The note is a head start' "$RUNNER_TEMP/fx-prompt.md"
           grep -q 'Nothing here is interactive' "$RUNNER_TEMP/fx-prompt.md"
           test -s issues.json || { echo '::error::issues.json was not written'; exit 1; }
           rm issues.json
