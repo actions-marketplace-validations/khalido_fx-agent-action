@@ -327,6 +327,14 @@ when fx's version in a footer moves.
   `tool_results[].{tool_call_id,tool_name,status,output,preview,truncated,
   output_bytes,stored_output_bytes,provider_native,permission_feedback}`.
   When the version moves, that file is what breaks.
+- **The workspace's `AGENTS.md` is in context before the first tool call.**
+  Measured: `fx ask` a question about this repo's own file answers in 0 steps.
+  So an instruction to "read AGENTS.md" buys a tool call for text the model
+  already has; only the precedence rule is worth the words. CLAUDE.md is not
+  mentioned in fx's docs, so that one still needs reading. This is also where
+  the cost sits — 30 KB of `AGENTS.md` here against a 15 KB assembled prompt,
+  which is the channel arxiv 2602.11988 measures when it finds context files
+  raise inference cost.
 - **`fx doctor --json` runs no model call** and names `.fx.json` in its
   `config` check when the checkout supplies one; the Configure step logs it.
 - **Subagents inherit the parent's restrictions**, so there is nothing to deny

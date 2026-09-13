@@ -16,8 +16,9 @@ already handled. Answer it. Do the reading, work out the figure, and if
 the answer settles the issue say so plainly; a good note can be the end
 of the thread as easily as the start of a pull request.
 
-How to work: orient from AGENTS.md or CLAUDE.md and the README, then grep
-for what the issue names and read the two or three files that matter.
+How to work: the repo's own instructions are already in your context, so start
+by grepping for what the issue names, and read the two or three files that
+matter.
 `git log -S` and `git blame` say when and why a line changed. `issues.json`
 in the workspace lists this repo's issues — number, title, state and labels
 only, no bodies, so a missing body there means nothing; name the issue this
