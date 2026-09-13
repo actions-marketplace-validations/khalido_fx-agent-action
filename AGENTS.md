@@ -299,7 +299,7 @@ question cannot also be the switch.
 token for a named bot, and for CI to run on what it pushes. No hosted service,
 ever — that is the line between this and the opencode model.
 
-## fx facts checked against 0.0.8
+## fx facts checked against 0.0.9
 
 Verified against the binary, so nobody re-checks them from memory. Recheck
 when fx's version in a footer moves.
@@ -317,8 +317,11 @@ when fx's version in a footer moves.
 - **`fx pr --create` is not a substitute for `open-pr.sh`.** It publishes
   through `gh` with no branch, no `--draft`, no body file. Drafting the text
   with `fx pr` and creating with `gh pr create --draft` is the split.
-- **Session JSON is `execution.schema_version` 3**, and `session-html.py`
-  depends on that shape: `history[].user.text`, `history[].assistant`,
+- **Session JSON is `execution.schema_version` 3**, still, on 0.0.9 — the
+  file on disk moved to `schema_version` 4 and grew a `title`, but the shape
+  `fx session <id> --json` hands back per turn did not. Verified by rendering
+  a 0.0.9 session through it. That file depends on the shape:
+  `history[].user.text`, `history[].assistant`,
   `execution.tool_steps[].{assistant,tool_calls,tool_results}`,
   `tool_calls[].{id,name,arguments_json,provider_result}`,
   `tool_results[].{tool_call_id,tool_name,status,output,preview,truncated,
@@ -341,6 +344,22 @@ when fx's version in a footer moves.
 - **No provider on the gateway's side frees a runner from the gateway key.**
   Codex and Grok need a browser sign-in saved per machine; `VERCEL_OIDC_TOKEN`
   is issued by a Vercel runtime, not a GitHub one.
+- **Generated session titles are free here** (0.0.9's "New conversations get a
+  short title from the first prompt"). A one-tool-call `fx ask` writes exactly
+  one `generation` line to `~/.fx/usage.jsonl`, and the title lands in
+  `session.json` anyway, so nothing extra is billed and there is nothing to
+  turn off in the settings file — the toggle is `/settings`, interactive only.
+- **`fx issue` exists as of 0.0.9**, `fx issue [--auto] [--create] [context]`,
+  and it publishes through `gh` exactly as `fx pr --create` does. Same verdict:
+  the action drafts and creates with `gh` itself, so there is nothing to adopt.
+- **Subagents can carry their own model and reasoning effort** (0.0.9). That
+  is chosen in the request, not in config, so the action has nothing to set;
+  a cheap model steering an expensive one is a prompt's decision.
+- **`effort` is profile-only and the Configure step does not write it**, so
+  every run is `auto`. 0.0.9 fixed the gateway ignoring the selected effort on
+  chat requests, so it now bites. Left alone deliberately: `fx status --json`
+  does not report effort, so unlike model, mode and step limit it cannot be
+  read back and asserted.
 
 ## Do we need actions/toolkit?
 
