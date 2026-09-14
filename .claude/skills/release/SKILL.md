@@ -55,7 +55,19 @@ That section **is** the release notes. One text, no second draft to drift.
 ### 4. Check it
 
 `shellcheck -S warning scripts/*.sh`, `actionlint`, and every input or output
-the changelog names exists in `action.yml`. Bring the `actions/*` pins in
+the changelog names exists in `action.yml`. Check it the other way too — an
+input in `action.yml` that no document mentions is the failure people hit, and
+a phantom input is only embarrassing:
+
+```bash
+python3 - <<'EOF'
+import re
+a = open('action.yml').read()
+inputs = set(re.findall(r'^  ([a-z_]+):', a.split('inputs:')[1].split('\noutputs:')[0], re.M))
+docs = set(re.findall(r'`([a-z_]+)`', open('CHANGELOG.md').read() + open('README.md').read()))
+print("undocumented:", sorted(inputs - docs) or "none")
+EOF
+``` Bring the `actions/*` pins in
 `examples/` and `action.yml` up to whatever Dependabot has moved
 `.github/workflows/` to, so the file people copy is the one that is tested. For a **MAJOR**, also hand the
 section to a fresh subagent to verify each claim against the code: editorial
@@ -86,6 +98,19 @@ commit within a minute.
 
 ### First release only
 
-Do it in the browser, from the `action.yml` banner: the Marketplace listing is
+**Flip every `@main` pin to `@v1` in the same commit as the changelog.** The
+README, all five `examples/*.yml`, `docs/guide.md`, and the normalising `sed`
+in `.github/workflows/check.yml` — which turns `@main` into `uses: ./` for the
+dogfood-drift diff and fails the build if it is left behind. `grep -rln
+"fx-agent-action@main" README.md docs examples .github` is the list. The file
+people copy has to name the tag they should pin, not the branch this repo
+develops on.
+
+Then tell the consumers. Repos already running `@main` take every push to main
+on their next issue, which is the whole reason the tag exists; each one has a
+Claude session that owns it, and there is a memory note listing them. Ask
+before switching someone else's pin for them.
+
+Do the release itself in the browser, from the `action.yml` banner: the Marketplace listing is
 a checkbox on the release form and has no CLI. The `name` in `action.yml`
 (`fx agent`) is what has to be unique there.

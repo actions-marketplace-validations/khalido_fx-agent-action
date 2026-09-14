@@ -363,11 +363,14 @@ when fx's version in a footer moves.
 - **Subagents can carry their own model and reasoning effort** (0.0.9). That
   is chosen in the request, not in config, so the action has nothing to set;
   a cheap model steering an expensive one is a prompt's decision.
-- **`effort` is profile-only and the Configure step does not write it**, so
-  every run is `auto`. 0.0.9 fixed the gateway ignoring the selected effort on
-  chat requests, so it now bites. Left alone deliberately: `fx status --json`
-  does not report effort, so unlike model, mode and step limit it cannot be
-  read back and asserted.
+- **`effort` now bites, and it is the one setting the Configure step cannot
+  assert.** The input defaults to empty and the step adds `effort` to the
+  settings file only when it is set, so an ordinary run is fx's `auto`. 0.0.9
+  fixed the gateway ignoring the selected effort on chat requests, which is
+  what makes the input worth using on a note that comes out shallow. But
+  `fx status --json` does not report effort, so unlike model, mode and step
+  limit there is nothing to read back — a typo in the value is caught by fx
+  refusing the file, not by our check.
 
 ## Do we need actions/toolkit?
 
