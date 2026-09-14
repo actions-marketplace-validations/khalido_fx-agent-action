@@ -15,10 +15,26 @@ set -euo pipefail
 # answer are different comments, each updated in place, not one overwriting
 # the other. The marker is matched whole, so `fx-agent-action -->` never
 # matches `fx-agent-action:note -->`.
-# With no key, an issue event's comment is the note and a comment event's is
-# the answer, so one job keeps them apart without being told to.
-if [ -z "${COMMENT_KEY:-}" ] && [ "${GITHUB_EVENT_NAME:-}" = "issues" ]; then
-  COMMENT_KEY=note
+# With no key, an issue event's comment is the note, and a comment event's
+# answer is keyed to the comment that asked — so a thread reads as pairs:
+# your question, fx's reply under it, your next question, its own reply. Edit
+# a question (the workflow needs `types: [created, edited]`) and only that
+# pair's reply is rewritten. One shared answer comment would have the second
+# question silently overwrite the first answer, which is the wrong shape for
+# a thread people actually converse in.
+if [ -z "${COMMENT_KEY:-}" ]; then
+  case "${GITHUB_EVENT_NAME:-}" in
+    issues) COMMENT_KEY=note ;;
+    *)
+      # `.comment.id` for an issue or PR comment, `.review.id` for a review.
+      # No payload (a manual dispatch, a test) falls back to one answer
+      # comment, which is what this did before there were pairs.
+      if [ -n "${GITHUB_EVENT_PATH:-}" ] && [ -f "${GITHUB_EVENT_PATH:-}" ]; then
+        src_id=$(jq -r '.comment.id // .review.id // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)
+        [ -n "$src_id" ] && COMMENT_KEY="c$src_id"
+      fi
+      ;;
+  esac
 fi
 # The key goes into a jq filter below; keep it to what action.yml promises.
 if [ -n "${COMMENT_KEY:-}" ] && ! [[ "$COMMENT_KEY" =~ ^[A-Za-z0-9-]+$ ]]; then

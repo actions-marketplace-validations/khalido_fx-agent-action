@@ -6,7 +6,9 @@
 #                                   the issue is a question. Refreshed in
 #                                   place when the issue changes
 #   /fx <question>                → an answer, read-only with a scratch shell,
-#                                   on any issue or PR
+#                                   on any issue or PR. Each question gets its
+#                                   own reply, so a thread reads as pairs;
+#                                   editing a question rewrites its reply
 #   /fx pr <what to build>        → a draft pull request
 #
 # The action tells the three apart by event and by the word after /fx, so the
@@ -26,7 +28,11 @@ on:
   issues:
     types: [opened, edited]
   issue_comment:
-    types: [created]
+    # `edited` too: fix a typo in your question and fx rewrites the reply to
+    # that question, rather than leaving a stale answer under it. The `if:`
+    # below means only a comment containing the trigger runs anything, and a
+    # bot's own comment never does.
+    types: [created, edited]
 
 jobs:
   fx:

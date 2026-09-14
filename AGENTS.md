@@ -251,11 +251,23 @@ zero-width characters, image alt text, hidden attributes. The list came from
 **Post `final_output`, not `output`.** The finished answer, not the running
 commentary. This is what makes the action model-agnostic.
 
-**One comment, updated.** A marker on the first line, invisible when rendered.
-GitHub keeps the edit history, so overwriting loses nothing. The comment step
-runs under `!cancelled()`: a red X with no comment is the worst outcome for
-someone who typed a command and walked away, while a cancelled run, superseded
-by a newer comment, should post nothing.
+**One comment per thing being answered, updated in place.** A marker on the
+first line, invisible when rendered; GitHub keeps the edit history, so
+overwriting loses nothing. The key is what decides *which* comment: `note` on
+an issue event, so a note refreshes as the issue is edited, and `c<comment id>`
+on a comment event, so each question gets its own reply and editing that
+question rewrites only its reply. The thread then reads as pairs — ask,
+answer, ask again, a second answer — which is how people actually use an
+issue. It was one shared answer comment until 2026-09-14, and the second
+question silently overwrote the first answer; useful chains of follow-up were
+the casualty. The workflow needs `issue_comment: types: [created, edited]` for
+the edit half; `edited` alone is safe because the `if:` still requires the
+trigger phrase and refuses bots, so editing an unrelated comment runs nothing.
+An explicit `comment_key` still wins, for a job that wants one comment of its
+own across a whole thread. The comment step runs under `!cancelled()`: a red X
+with no comment is the worst outcome for someone who typed a command and
+walked away, while a cancelled run, superseded by a newer comment, should post
+nothing.
 
 **Pull requests are drafts, and only carry what fx touched.** The draft state
 is the human-oversight step — the same reason `claude-code-action` stops at a

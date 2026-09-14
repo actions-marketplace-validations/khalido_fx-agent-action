@@ -7,8 +7,8 @@ coding agent, reads the code and leaves a note: where this lives, what is
 already there, and the answer itself when the issue turns out to be a
 question. Comment `/fx` with a question and it answers. `/fx pr …` gets a
 draft pull request. It runs in your own runner, no app to install, no service
-in the middle, and posts one comment that it edits rather than a new one per
-run.
+in the middle. Each question gets one comment that it edits rather than a new
+one per run, so a thread reads as question and answer pairs.
 
 ```yaml
 # .github/workflows/fx.yml

@@ -20,7 +20,9 @@ Working on the action itself is a different job; that is [`AGENTS.md`](../AGENTS
    like a secret.
 7. **Opens a draft PR** in write mode, from the difference between the tree
    before and after.
-8. **Posts one comment**, or edits the one it posted before, with a footer:
+8. **Posts one comment per question**, or edits the one it posted before —
+   the note refreshes as the issue is edited, and each `/fx` question keeps
+   its own reply, so follow-ups read as pairs. With a footer:
    fx, model, tokens, cost in cents, seconds, a link to the run.
 9. **Uploads the session** as one HTML file, kept a week.
 
