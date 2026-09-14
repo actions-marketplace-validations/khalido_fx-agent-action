@@ -9,7 +9,9 @@ Everything here runs through Vercel's AI Gateway, so a model question has
 three fast sources and one judgement. Do the sources in order and stop when
 the question is answered.
 
-1. **The catalog**, no key needed:
+1. **The catalog**, no key needed: `https://ai-gateway.vercel.sh/v1/models`
+   is public JSON. In read mode there is no shell — fetch that URL with your
+   web tool and find the id. With a shell, filter it:
 
    ```bash
    curl -fsSL https://ai-gateway.vercel.sh/v1/models \

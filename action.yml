@@ -445,6 +445,15 @@ runs:
         names=()
         for src in "$GITHUB_ACTION_PATH/skills" .github/fx/skills; do
           [ -d "$src" ] || continue
+          # With `uses: ./` the action path IS the checkout, so fx already
+          # discovers this same skills/ from the workspace. Copying it would
+          # put the skill in context twice and show two skill calls in the
+          # artifact — measured on this repo's own runs. A repo's
+          # .github/fx/skills is never discovered, so it is always copied.
+          if [ "$src" -ef "$PWD/skills" ]; then
+            echo "skills: $src is the workspace's own; fx discovers it, not copying" >&2
+            continue
+          fi
           for d in "$src"/*/; do
             d="${d%/}"
             [ -f "$d/SKILL.md" ] || continue
