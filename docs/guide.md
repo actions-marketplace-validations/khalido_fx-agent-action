@@ -179,7 +179,7 @@ PRs it opens, make a GitHub App, install it on the repo, pass its token:
   with:
     app-id: ${{ secrets.FX_APP_ID }}
     private-key: ${{ secrets.FX_APP_PRIVATE_KEY }}
-- uses: khalido/fx-agent-action@main
+- uses: khalido/fx-agent-action@v1
   with:
     github_token: ${{ steps.app.outputs.token }}
 ```

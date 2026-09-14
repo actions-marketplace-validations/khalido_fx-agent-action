@@ -55,7 +55,17 @@ branch="${BRANCH_PREFIX:-fx}/${ISSUE_NUMBER:-run}-$(date +%s)"
 # parsed loosely and anything unexpected falls back to the agent's own answer.
 draft="$RUNNER_TEMP/fx-pr-draft.md"
 title=''
-if fx pr < /dev/null > "$draft" 2>/dev/null; then
+# No GH_TOKEN for fx: this step has one for the push below, and fx's shell is a
+# child process that inherits the environment. The agent gets the diff, not the
+# credential.
+if env -u GH_TOKEN fx pr < /dev/null > "$draft" 2>/dev/null; then
+  # Scrub HERE, not before the body is written further down: the title parsed
+  # out of this file on the next line becomes the commit message and the pull
+  # request title, and both are pushed before the body is ever read.
+  python3 -c "import sys; sys.path.insert(0, sys.argv[2]); import redact;
+found = redact.redact_file(sys.argv[1]);
+[print(f'::warning::Removed {n} from the pull request draft before using it.') for n in found]" \
+    "$draft" "$(dirname "$0")" 2>/dev/null || true
   title=$(grep -m1 -E '^[[:space:]]*(\*\*)?Title:' "$draft" \
     | sed -E 's/^[[:space:]]*(\*\*)?Title:(\*\*)?[[:space:]]*//; s/[[:space:]]*$//')
 fi
@@ -110,10 +120,6 @@ git push -q "https://x-access-token:${GH_TOKEN}@${host}/${GITHUB_REPOSITORY}.git
 # runner's HOME is fresh, so the ledger holds only this job's spend.
 # The ledger again, now with the fx pr request in it; estimated under BYOK.
 bash "$(dirname "$0")/cost.sh" >> "$GITHUB_OUTPUT" 2>/dev/null || true
-
-# The draft is model output and has not been through run-fx.sh's scrubber.
-python3 -c "import sys; sys.path.insert(0, sys.argv[2]); import redact; redact.redact_file(sys.argv[1])" \
-  "$draft" "$(dirname "$0")" 2>/dev/null || true
 
 body_file="$RUNNER_TEMP/fx-pr-body.md"
 {

@@ -40,7 +40,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: khalido/fx-agent-action@main
+      - uses: khalido/fx-agent-action@v1
         env:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
         with:

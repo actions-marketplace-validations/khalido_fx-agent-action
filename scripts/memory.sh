@@ -96,7 +96,8 @@ save)
       printf 'Output only the new file contents. No preamble, no fences.\n\n'
       cat "$file"
     } > "$prompt"
-    if compacted=$(fx ask --json --no-save --quiet -- "$(cat "$prompt")" 2>/dev/null | jq -r '.final_output // empty') \
+    # No GH_TOKEN for fx: the step that calls this has one for the save below.
+    if compacted=$(env -u GH_TOKEN fx ask --json --no-save --quiet -- "$(cat "$prompt")" 2>/dev/null | jq -r '.final_output // empty') \
        && [ -n "$compacted" ] && [ "$(printf '%s\n' "$compacted" | wc -l | tr -d ' ')" -le "$((cap + 5))" ]; then
       printf '%s\n' "$compacted" > "$file"
       status=compacted

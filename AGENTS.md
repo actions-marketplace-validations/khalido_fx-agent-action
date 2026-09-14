@@ -261,10 +261,14 @@ by a newer comment, should post nothing.
 is the human-oversight step — the same reason `claude-code-action` stops at a
 branch and makes a person click the button.
 
-**fx never holds a GitHub token, and the action checks its own files after
-the run.** The `Run fx` step has no `GH_TOKEN`, the examples check out with
-`persist-credentials: false`, and only `open-pr.sh` pushes, to a branch, with
-the token in the URL. That leaves one route to the default branch in write
+**No fx process holds a GitHub token, and the action checks its own files
+after the run.** The `Run fx` step has no `GH_TOKEN`, the examples check out
+with `persist-credentials: false`, and only `open-pr.sh` pushes, to a branch,
+with the token in the URL. Two later fx calls do sit inside steps that hold
+one — `fx pr` in `open-pr.sh` and the compaction `fx ask` in `memory.sh` — so
+both run under `env -u GH_TOKEN`. `fx pr` can run commands and the compaction
+call is full-access in write mode; the environment a child process inherits is
+the whole reason the main run never got a token either. That leaves one route to the default branch in write
 mode: fx, with a full shell, editing `open-pr.sh` under `_actions/` before it
 runs. So before any run that can write to disk, `Fingerprint the action`
 hashes the action's `action.yml` and `scripts/` per file into a step output,

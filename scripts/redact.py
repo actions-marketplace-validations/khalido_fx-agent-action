@@ -7,11 +7,12 @@ not in the API request bodies this action sends, and not inside an artifact.
 So a comment, a pull request body and a session artifact are three ways out of
 the runner that log masking does not cover.
 
-Used by run-fx.sh (the answer), open-pr.sh (fx's drafted PR body) and
-session-html.py (the transcript). Not the commit itself: what fx writes to a
-FILE is not scanned, and a determined agent could put a secret there — which is
-one more reason the gateway key is budgeted and the write path is gated on
-people who could already push.
+Used by run-fx.sh (the answer), open-pr.sh (fx's whole PR draft, the moment it
+is written — the title is parsed out of it into a commit message that is pushed
+before the body is ever read) and session-html.py (the transcript). Not what fx
+writes to a FILE: that is not scanned, and a determined agent could put a
+secret there — which is one more reason the gateway key is budgeted and the
+write path is gated on people who could already push.
 """
 
 import os
