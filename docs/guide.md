@@ -13,61 +13,68 @@ Working on the action itself is a different job; that is [`AGENTS.md`](../AGENTS
    edit is the trigger. Taken off at the end.
 3. **Installs fx**, the latest release, cached by version.
 4. **Builds the prompt**: the base block, the instruction, then the thread as
-   evidence with hidden markup stripped. Decides read or write.
+   evidence with hidden markup stripped.
 5. **Configures fx** from one settings file, then reads the settings back and
    fails if fx did not take them.
 6. **Runs fx once.** One `fx ask`, the answer scrubbed of anything that looks
    like a secret.
-7. **Opens a draft PR** in write mode, from the difference between the tree
-   before and after.
+7. **Opens a draft PR** when the agent asked for one and the tree changed,
+   from the difference between the tree before and after.
 8. **Posts one comment per question**, or edits the one it posted before —
    the note refreshes as the issue is edited, and each `/fx` question keeps
    its own reply, so follow-ups read as pairs. With a footer:
    fx, model, tokens, cost in cents, seconds, a link to the run.
 9. **Uploads the session** as one HTML file, kept a week.
 
-## Three modes
+## Two modes
 
-| | read | scratch (`shell: true`) | write (`/fx pr`) |
-|---|---|---|---|
-| read files, search the web | yes | yes | yes |
-| run commands | no | yes | yes |
-| edit files | no | yes, thrown away | yes |
-| commit, push, PR | no | no | draft PR |
-| fx permission mode | `auto`, edit and shell denied | `auto`, both allowed | `full-access` |
-| needs | `contents: read` | `contents: read` | `contents: write`, `pull-requests: write` |
+| | agent (default) | read |
+|---|---|---|
+| read files, search the web | yes | yes |
+| run commands, edit files | yes | no |
+| commit, push, PR | draft PR, when it decides to ship | no |
+| fx permission rules | edit and shell allowed | edit and shell denied |
+| needs | `contents: write`, `pull-requests: write` for PRs; `contents: read` for answers only | `contents: read` |
 
-**Read** is what a `/fx` question gets by default. The edit and shell tools
-are hidden from the model by rule, so it never spends a step finding out.
+**Agent** is one agent with a shell and edits, every run. It reads the
+thread, tries things in the checkout, runs the tests, and decides what the
+run should produce: an answer, or, when it was asked to change something and
+can do it well in one run, the change as a draft pull request through its
+`open-pr` skill. The skill has it write `.agent-pr.md` (title, then body)
+and the action does the branch, the push and the PR; no file, or an
+unchanged tree, and nothing opens. When the change is bigger than a run or
+needs a decision, the base block tells it to leave a pointed note for a
+stronger agent or a person instead. Nothing else it does to the checkout is
+kept. With `contents: read` on the job the push fails, the edits are thrown
+away, and the comment carries a line saying the agent asked for a pull
+request the job could not push; that is the off switch for pull requests,
+and `mode: read` is the one that also takes the shell away.
+
+**Read** is for a fixed prompt on a job that strangers or bots may trigger.
+The edit and shell tools are hidden from the model by rule, so it never
+spends a step finding out, and a model with no shell cannot read the
+runner's environment. It can open nothing.
 
 Check out with `fetch-depth: 0`, as the examples do. The default shallow
 clone leaves `git log` and `git blame` with one commit, and "this used to
 work, what changed?" is the question history answers. A full clone of an
 ordinary repo costs a second or two; set a depth only on a very large one.
 
-**Scratch** is read plus a shell and edits, nothing kept. The checkout is a
-throwaway container, and an agent that can try a fix and run the tests gives
-a better answer than one that guesses. The base block tells it to report what
-it found, not what it changed. This is what `examples/fx.yml` uses for both
-the note and questions. What scratch mode changes is exposure: a shell can
-read the runner's environment, gateway key included, so it does not combine
-with `allowed_non_write_users` or with bots on issue events.
-
-**Write** is `/fx pr`. Full access inside the runner, because the real
-boundary is the workflow's `permissions:` block, not fx's review layer. The
-agent edits the working tree and stops; the action makes the branch, the
-commit and the draft PR.
-
-`mode: read` or `mode: write` on the job forces one; `auto`, the default,
-lets the comment decide, and only the word `pr` right after the trigger turns
-writing on.
+What the shell changes is exposure: it can read the runner's environment,
+gateway key included, so the agent mode does not combine with
+`allowed_non_write_users` or with bots on issue events. The real boundary
+around what the agent can do to the repository is the workflow's
+`permissions:` block, not fx's review layer, which is why the rules are
+allow rules and not `auto`'s billed review call per action.
 
 ## The prompt, layer by layer
 
 1. **The base block**, written by the action for every run. Where it is, that
-   nothing is interactive, which tools it has in this mode, that only the final
-   answer is posted, the voice, and in write mode: edit the tree, do not
-   commit. It also says the repo's `AGENTS.md` may add to or adjust the task.
+   nothing is interactive, which tools it has in this mode, the voice, that
+   only the final answer is posted, and the judgement: answer a question;
+   make, test and ship a change when it fits one run; otherwise leave a note
+   for a stronger agent or a person. It also says the repo's `AGENTS.md` may
+   add to or adjust the task.
 2. **The instruction.** In order of precedence: `prompt_file` if that file
    exists in the checkout; `prompt` inline in the workflow; on an `issues`
    event, the built-in note, [`prompts/issue.md`](../prompts/issue.md);
@@ -87,15 +94,20 @@ The action adds skills of its own. Its `skills/` folder, and the repo's
 `.github/fx/skills/` if there is one, are copied into `~/.fx/skills/` on the
 runner before fx starts, so they exist for this agent in this run and for
 nothing else, not your laptop's fx, not Claude Code. `skills: false` turns the
-copy off. Shipped today: `compare-models`, for "is this model on the gateway,
-what does it cost, what do people hit, does it fit this repo, switch or test
-it". A skill here improves for every repo on the next run, like the note.
+copy off. Shipped today: `open-pr`, the procedure for shipping a change
+(clean tree, checks run, `.agent-pr.md` written), and `compare-models`, for
+"is this model on the gateway, what does it cost, what do people hit, does it
+fit this repo, switch or test it". A skill here improves for every repo on
+the next run, like the note.
 
 **To add to what the agent does in your repo**, write it in `AGENTS.md`. A
 `## In CI` section keeps bot instructions apart from laptop ones. **To change
 the note entirely**, add `.github/fx/issue.md`; on issue events the action
 uses it instead of the built-in note, with no input to set, so the same job
-still answers `/fx` comments from the comment. **For another kind of job**, `prompt` inline or a
+still answers `/fx` comments from the comment. The built-in note says "no
+pull request from a note"; a replacement that does not say so lets an issue
+opening end in a draft PR when the agent judges the ask fits one run, which
+may be what you want. **For another kind of job**, `prompt` inline or a
 `prompt_file` of your own; the base block and the thread come free.
 
 ## Memory
@@ -120,10 +132,9 @@ the same model, to compact it. Everything is non-fatal: a failed push loses
 this run's memory and nothing else. The path is excluded from pull requests.
 
 What it needs: `contents: write` on the job, because the push uses the
-workflow token; fx itself never holds it. And a mode that can edit, so
-`shell: true` or a `pr` run; plain read mode sees the memory and cannot
-change it. `memory_repo` pointing at the org's `.github` repo, with an App
-token through `github_token`, gives one memory across an org.
+workflow token; fx itself never holds it. Read mode sees the memory and
+cannot change it. `memory_repo` pointing at the org's `.github` repo, with an
+App token through `github_token`, gives one memory across an org.
 
 The memory is quoted inside the untrusted framing, because earlier runs wrote
 it from threads a stranger may have shaped. Read it on the branch in the
@@ -140,7 +151,7 @@ rather than skipping it, so a misconfigured workflow is visible:
   `pull_request_review_comment` events, via the collaborators permission
   endpoint, which the default token can call. Scheduled and manual runs skip
   this check. `allowed_non_write_users` lists exceptions, or `*` for anyone,
-  and only combines with `mode: read` and no shell.
+  and only combines with `mode: read`.
 - **Not a bot**, on every event: a `[bot]` login, a `Bot` sender type, or a
   login that is not a user account. `allowed_bots` lists exceptions, with or
   without the `[bot]` suffix, or `*`, and on issue and PR events the same
@@ -152,12 +163,16 @@ access, so it is a filter and not the check.
 
 ## Pull requests
 
-`/fx pr <what to build>` runs in write mode. The action snapshots the tree
-before fx runs, and afterwards the PR carries exactly the files that differ,
-committed on a branch named from `branch_prefix` and the issue number, pushed
-with the workflow token, opened as a **draft**. The body is what fx wrote
-about its change. A person reviews and marks it ready; nothing merges on its
-own.
+The agent opens one when it was asked for a change and judges the change
+ready: it writes `.agent-pr.md` at the repo root, title on the first line and
+the body after, and the action does the rest. The tree was snapshotted before
+fx ran, so the PR carries exactly the files that differ, committed on a
+branch named from `branch_prefix` and the issue number, pushed with the
+workflow token, opened as a **draft**. The body is what the agent wrote:
+what changed, what it left alone, which checks ran. A person reviews and
+marks it ready; nothing merges on its own. No `.agent-pr.md`, or a tree that
+did not change, and nothing is opened: prose alone cannot open a pull
+request, and neither can a run in read mode.
 
 Two GitHub facts shape this:
 
@@ -187,7 +202,7 @@ PRs it opens, make a GitHub App, install it on the repo, pass its token:
 ```
 
 The App needs Contents, Pull requests and Issues read and write, plus
-Workflows read and write if `/fx pr` should be able to change workflow files.
+Workflows read and write if the agent should be able to change workflow files.
 The App is yours. I don't want the ability to mint tokens into your repo.
 
 ## Cost
@@ -224,8 +239,8 @@ that provider, with fallback to the pool. DeepSeek's own endpoint has peak
 pricing, double between 01:00 and 04:00 and 06:00 and 10:00 UTC on weekdays.
 
 Model choice is one input. `deepseek/deepseek-v4.1-flash` is the default; a
-note runs a few cents, a question about the same. `pr_model` puts write runs
-on something stronger without touching questions. `effort` passes a reasoning
+note runs a few cents, a question about the same, and a change that ends in
+a pull request more, since it runs the tests too. `effort` passes a reasoning
 effort to models that take one. `max_steps` caps the tool loop and is set in
 the action's settings, so a repo's `.fx.json` cannot raise it.
 
@@ -264,8 +279,8 @@ Things that fail on the first day:
   and a run that finds fx has edited the action's own scripts stops before
   the step that pushes or posts. A private repo on the free plan cannot have
   branch protection, so there you are trusting those guards and everyone
-  with write access. If that is not true of your repo, do not wire `pr`:
-  `mode: read` and `contents: read`.
+  with write access. If that is not true of your repo, `contents: read`; the
+  agent can then push nothing however it is asked.
 - **Read mode can reach the web.** Search and fetch are on, so an injected
   thread that steers the agent could read a file and send it out in a URL.
   The write-access check is the control; only people who could already read
@@ -273,9 +288,9 @@ Things that fail on the first day:
 - **The agent reads your `AGENTS.md` and sees every skill in the repo**, as
   above, and on a PR that is the PR's copy. The pr-review example skips forks
   for this reason.
-- **Anyone who can trigger a run can spend the key**, and in scratch or write
-  mode a thread that talks the agent into a command has a shell that can read
-  it. Secrets are scrubbed from everything posted; the budget is the control.
+- **Anyone who can trigger a run can spend the key**, and a thread that talks
+  the agent into a command has a shell that can read it. Secrets are scrubbed
+  from everything posted; the budget is the control.
 - **`@main` for now.** Every push here reaches every repo on `@main` at its
   next run, good and bad. That is the right trade while this is young and the
   people using it are in the same room. Once a release exists, `@v1` moves
@@ -297,6 +312,6 @@ For one repo, maybe not:
 
 [`examples/minimal-no-action.yml`](../examples/minimal-no-action.yml) is that,
 finished. The action adds what you would otherwise paste into every repo: the
-actor checks, one comment instead of a pile, a cached binary, read-only that
-holds, the thread and diff with hidden markup stripped, the built-in note, and
-the session to read when it goes wrong.
+actor checks, one comment instead of a pile, a cached binary, the draft pull
+request from what the agent changed, the thread and diff with hidden markup
+stripped, the built-in note, and the session to read when it goes wrong.

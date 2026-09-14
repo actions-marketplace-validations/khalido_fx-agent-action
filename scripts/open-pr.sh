@@ -43,10 +43,12 @@ after=$(GIT_INDEX_FILE="$RUNNER_TEMP/fx-index-after" git write-tree)
 # has already done.
 changed="$RUNNER_TEMP/fx-changed.z"
 git diff --name-only -z "$before" "$after" > "$changed"
-# The memory file goes to its own branch through memory.sh, and the signal
-# file is the pull request's text, not part of it.
-if grep -qzE "(^|/)\.agent-memory/|^$signal\$" "$changed" 2>/dev/null; then
-  grep -zvE "(^|/)\.agent-memory/|^$signal\$" "$changed" > "$changed.f" || true
+# The memory file goes to its own branch through memory.sh, the signal file
+# is the pull request's text, not part of it, and __pycache__ is what running
+# a Python repo's checks leaves behind: the first live PR carried a .pyc.
+skip="(^|/)\.agent-memory/|(^|/)__pycache__/|^$signal\$"
+if grep -qzE "$skip" "$changed" 2>/dev/null; then
+  grep -zvE "$skip" "$changed" > "$changed.f" || true
   mv "$changed.f" "$changed"
 fi
 
@@ -123,7 +125,18 @@ git commit -q -m "$title" -m "Opened by fx from #${ISSUE_NUMBER:-} · run ${GITH
 # GITHUB_SERVER_URL rather than a hard-coded github.com, so this works on
 # GitHub Enterprise Server too.
 host="${GITHUB_SERVER_URL:-https://github.com}"; host="${host#https://}"
-git push -q "https://x-access-token:${GH_TOKEN}@${host}/${GITHUB_REPOSITORY}.git" "HEAD:$branch"
+# A job with `contents: read` cannot push, and that is the off switch for pull
+# requests: say so in the comment rather than fail a step the answer already
+# describes as shipped. Any other push failure is still an error.
+if ! push_err=$(git push -q "https://x-access-token:${GH_TOKEN}@${host}/${GITHUB_REPOSITORY}.git" "HEAD:$branch" 2>&1); then
+  if printf '%s' "$push_err" | grep -qiE '403|permission|not permitted|write access'; then
+    echo "::warning::The agent asked for a pull request but the job's token cannot push a branch (give the job contents: write). Its edits are thrown away." >&2
+    { echo "pr_url="; echo "pr_unpushed=true"; } >> "$GITHUB_OUTPUT"
+    exit 0
+  fi
+  echo "::error::git push failed: $(printf '%s' "$push_err" | sed "s#x-access-token:[^@]*@#x-access-token:***@#" | head -c 300)" >&2
+  exit 1
+fi
 
 body_file="$RUNNER_TEMP/fx-pr-body.md"
 {
@@ -146,7 +159,16 @@ body_file="$RUNNER_TEMP/fx-pr-body.md"
 # Draft, always. Nobody has read this yet, and a draft cannot be merged by
 # accident — the same reason anthropics/claude-code-action stops at a branch and
 # makes a person click "create pull request".
-url=$(gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" --draft \
+# Against the branch the workflow ran on, so a workflow_dispatch run from a
+# feature branch (how a change to this action is tried) targets that branch
+# and not the default one. On a pull_request event the ref is a merge ref, and
+# then gh's default, the repo's default branch, is the only sane base.
+base=''
+case "${GITHUB_REF_TYPE:-}:${GITHUB_REF_NAME:-}" in
+  branch:*/merge|branch:|:*) ;;
+  branch:*) base="$GITHUB_REF_NAME" ;;
+esac
+url=$(gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" --draft ${base:+--base "$base"} \
   --title "$title" --body-file "$body_file" | tail -1)
 
 echo "pr_url=$url" >> "$GITHUB_OUTPUT"

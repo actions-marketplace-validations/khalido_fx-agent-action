@@ -8,6 +8,48 @@ break and how a release is cut.
 
 ## [Unreleased]
 
+### Changed
+
+- **One agent, and the pull request is its call.** Every run has a shell and
+  edits. A question gets an answer; "fix this" or "add that" gets the change,
+  tested, as a draft pull request when the agent judges it fits one run, and
+  a note saying what it would change and what a stronger agent should pick
+  up when it does not. The mechanics are the new `open-pr` skill: the agent
+  writes `.agent-pr.md`, title then body, and the action does the branch,
+  push and draft PR. No file, or an unchanged tree, and nothing opens. fx
+  still never holds a GitHub token, and the `fx pr` drafting call is gone.
+- **Each `/fx` comment gets its own reply**, keyed to the comment, rewritten
+  when the comment is edited; the workflow needs
+  `issue_comment: types: [created, edited]` for the edit half. An issue note
+  still refreshes in place.
+- **`examples/fx.yml` runs on `workflow_dispatch` too**, with an issue number
+  and a prompt, from any branch: how a change to the action is tried before
+  it lands.
+- **`compare-models` works without a shell**, fetching the catalog with the
+  web tool, and the dogfood run no longer copies the repo's own `skills/`
+  onto itself.
+- **A job with `contents: read` is the off switch for pull requests**: a
+  change the agent asked to ship is thrown away and the comment says so,
+  instead of a red step under an answer that says "shipped".
+
+### Removed
+
+- Inputs `shell` and `pr_model`, and `mode` values `auto` and `write`. `mode`
+  is `agent` (default) or `read`; `read` denies the shell and edits and can
+  open nothing, and is the only mode that combines with
+  `allowed_non_write_users` or `allowed_bots` on issue and PR events.
+- `/fx pr` as the phrase that turned writing on. `/fx pr add X` still works;
+  it now reads as "add X".
+
+### Fixed
+
+- Every write-mode prompt build had failed since 2026-09-11 on a broken
+  heredoc line, so `/fx pr` went red at "Build the prompt" with no comment
+  (#14). CI now builds the comment path in both modes.
+- The secret scrub on pull request text no longer depends on the drafting
+  call succeeding, and a scrub that fails stops the push (#15, first two
+  gaps).
+
 ## [1.0.0] - 2026-09-14
 
 First release. An agent on your issues: open one and [fx](https://fx.sh)

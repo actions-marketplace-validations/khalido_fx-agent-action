@@ -5,10 +5,13 @@
 An agent on your issues. Open one and [fx](https://fx.sh), Vercel Labs'
 coding agent, reads the code and leaves a note: where this lives, what is
 already there, and the answer itself when the issue turns out to be a
-question. Comment `/fx` with a question and it answers. `/fx pr …` gets a
-draft pull request. It runs in your own runner, no app to install, no service
-in the middle. Each question gets one comment that it edits rather than a new
-one per run, so a thread reads as question and answer pairs.
+question. Comment `/fx` with a question and it answers; say "fix this" or
+"add that" and it makes the change, runs your checks, and opens a draft pull
+request when it judges it can do the job in one run, or leaves a note saying
+what it would change and what a stronger agent should pick up. It runs in
+your own runner, no app to install, no service in the middle. Each comment
+gets its own reply, edited in place, so a thread reads as question and answer
+pairs.
 
 ```yaml
 # .github/workflows/fx.yml
@@ -17,7 +20,7 @@ on:
   issues:
     types: [opened, edited]
   issue_comment:
-    types: [created]
+    types: [created, edited]
 jobs:
   fx:
     if: >-
@@ -44,7 +47,6 @@ jobs:
         env:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
         with:
-          shell: true
           max_steps: '60'
 ```
 
@@ -61,37 +63,41 @@ secret, and the switch GitHub leaves off that lets a workflow open a pull
 request. `gh secret set` prompts for the key, which keeps it out of your shell
 history; a script or an agent doing this unattended passes `--body` or pipes it
 in. The same file with comments is [`examples/fx.yml`](examples/fx.yml);
-this repo runs it on itself. One job: the action tells a new issue from a
-`/fx` comment by the event, and a question from `pr` by the word. Only want
-answers? Drop the `issues:` trigger, set `contents: read` and `memory: false`.
+this repo runs it on itself. One job, one agent: a new issue gets a note,
+a `/fx` comment gets whatever it asked for. Only want answers? Set
+`contents: read` and `memory: false`: the agent may still try a change, but
+the push fails and the comment says so instead of linking a PR. `mode: read`
+takes the shell away too, at the cost of the tests it could have run.
 
 ## What happens
 
 ```mermaid
 flowchart TD
-    I[Issue opened or edited<br/>by someone with write access] --> N[note<br/>read + shell, built-in prompt]
+    I[Issue opened or edited<br/>by someone with write access] --> N[note<br/>built-in prompt]
     N --> NC[One note comment<br/>rewritten in place on every edit]
     C["Comment containing /fx"] --> G{Write access<br/>and not a bot?}
     G -- no --> X[Run fails, nothing posted]
-    G -- yes --> V{First word after<br/>/fx is pr?}
-    V -- no --> R[read + shell<br/>answers the question]
-    V -- yes --> W[full access<br/>edits the working tree]
-    R --> AC[One answer comment<br/>rewritten on every /fx]
-    W --> PR[Draft pull request] --> AC
+    G -- yes --> A[The agent: reads, searches,<br/>runs commands, edits the checkout]
+    A --> D{Asked for a change,<br/>and it fits one run?}
+    D -- no --> AC[A reply under that comment<br/>rewritten if the comment is edited]
+    D -- yes --> PR[Draft pull request<br/>from what it changed] --> AC
 ```
 
-Edit the issue and the note refreshes. Ask again and the answer refreshes.
-Nothing merges without a person.
+Edit the issue and the note refreshes. Edit your comment and its reply
+refreshes. Nothing merges without a person.
 
 ## Talking to it
 
 **`/fx why is the sync running twice?`** reads the repo, the thread and the
-git history, and with `shell: true` as above can try a fix and run the tests
-before it answers. The checkout is thrown away; it commits nothing.
+git history, tries things in the checkout and runs the tests, then answers.
+The checkout is thrown away.
 
-**`/fx pr add a retry to the API client`** edits the working tree, and what
-changed becomes a branch and a draft PR linked from the comment. `pr` is the
-only word that turns writing on.
+**`/fx add a retry to the API client`** makes the change, runs your checks,
+and what changed becomes a branch and a draft PR linked from the comment. The
+agent decides that: when the change is bigger than one run or needs a call
+that is not its to make, it says what it would change and where, and what a
+stronger agent or a person should pick up. There is no magic word; the
+workflow's `permissions:` block is what decides whether it can push at all.
 
 `/fx` can sit anywhere in the comment, any case, but not in a quoted line.
 `trigger: '/fx, /agent'` accepts several phrases; widen the job's `if:` to
@@ -113,10 +119,11 @@ there: "when you leave a note on an issue, name the design doc that covers it;
 anything that needs taste is KO's call". A short `## In CI` section keeps it
 apart from laptop instructions like "run the app and click".
 
-**Skills.** The action ships its own under [`skills/`](skills/), today
-`compare-models`, which checks a model's id and price on the gateway, what
-people hit with it, and whether it fits this repo's jobs, and copies them into
-fx's skill folder on the runner for that run only. Your repo's own skill
+**Skills.** The action ships its own under [`skills/`](skills/): `open-pr`,
+how a change ships (clean tree, checks run, one file with the title and
+body), and `compare-models`, which checks a model's id and price on the
+gateway, what people hit with it, and whether it fits this repo's jobs. They
+are copied into fx's skill folder on the runner for that run only. Your repo's own skill
 folders are seen as they are; `.github/fx/skills/` is copied the same way for
 skills only this agent should have. `skills: false` turns the copy off.
 
@@ -142,9 +149,9 @@ Two checks before anything else, the same two
 [claude-code-action](https://github.com/anthropics/claude-code-action) runs,
 and the run fails if either says no: write access to the repo on issue and PR
 events, and a human actor on every event. `allowed_non_write_users` and
-`allowed_bots` are the exceptions, and only combine with `mode: read` and no
-shell. Keep the `if:` on the job too; it is what stops a stranger's `/fx` from
-booting a runner at all.
+`allowed_bots` are the exceptions, and only combine with `mode: read`, which
+has no shell and opens nothing. Keep the `if:` on the job too; it is what
+stops a stranger's `/fx` from booting a runner at all.
 
 ## Inputs
 
@@ -155,9 +162,7 @@ All optional.
 | `prompt` | the comment, or the built-in note on an issue event | What to ask. The thread is appended below it. |
 | `prompt_file` | | Instructions in a file in your repo. Wins over `prompt` and the built-in note when it exists. |
 | `model` | `deepseek/deepseek-v4.1-flash` | Any [AI Gateway model id](https://vercel.com/ai-gateway/models). |
-| `pr_model` | same as `model` | A stronger model for `pr` runs only. |
-| `mode` | `auto` | The comment decides. `read` and `write` force it. |
-| `shell` | `false` | Shell and edits in read mode too, thrown away. Nothing is committed. |
+| `mode` | `agent` | The one agent: shell, edits, and a draft PR when it decides to ship. `read` denies the shell and edits and opens nothing. |
 | `memory` | `true` | One `MEMORY.md` on an orphan branch, read before and pushed after each run. Your default branch is never touched. |
 | `memory_branch`, `memory_repo`, `memory_lines` | `agent-memory`, this repo, `80` | Where the memory lives and how long it may get. |
 | `skills` | `true` | Copy the action's skills and the repo's `.github/fx/skills/` to fx on the runner. |
@@ -166,7 +171,7 @@ All optional.
 | `allowed_bots` | | Bots allowed to trigger, with or without `[bot]`, or `*`. |
 | `max_steps` | `30` | Cap on the tool loop. Set here, so a repo's `.fx.json` cannot raise it. |
 | `effort` | fx's `auto` | Reasoning effort, `low` to `max`, on models that have it. |
-| `max_cost` | `1` | Fail over this many dollars, after the fact. A `pr` still opens. |
+| `max_cost` | `1` | Fail over this many dollars, after the fact. A PR the agent asked for still opens. |
 | `post` | `comment` | `none` leaves the answer on the `response` output. |
 | `comment_key` | | Keeps this job's comment apart from another fx job's. |
 | `session_artifact` | `true` | The run as one HTML file on the run page. |
@@ -181,7 +186,7 @@ Outputs: `response`, `cost`, `steps`, `session_id`, `comment_url`, `pr_url`.
 - **[fx](examples/fx.yml)**: the one above, with comments.
 - **[pr-review](examples/pr-review.yml)**: a review on open and on push, under 200 words, no praise.
 - **[triage](examples/triage.yml)**: labels from the ones the repo has. The agent picks, the workflow applies.
-- **[build-it](examples/build-it.yml)**: `/fx pr` alone.
+- **[build-it](examples/build-it.yml)**: comments only, on a stronger model.
 - **[weekly-deps](examples/weekly-deps.yml)**: bump, run your checks, one PR a week with a note.
 - **[minimal-no-action](examples/minimal-no-action.yml)**: fx in two `run:` lines, no action at all.
 
@@ -218,7 +223,7 @@ This action is the GitHub plumbing around it and nothing else.
 
 ## The rest
 
-[docs/guide.md](docs/guide.md) is everything else in one file: the three
+[docs/guide.md](docs/guide.md) is everything else in one file: the two
 modes, the prompt layer by layer, the actor checks in detail, pull requests
 and App tokens, cost, and what fails on the first day. For an agent, the raw
 copy is

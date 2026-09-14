@@ -256,7 +256,7 @@ same two calls in the same two places, the key added to `redact.py`.
 **What goes wrong.** A new vendor in a run's critical path, a new secret on the
 runner, a startup that repriced eight months ago, and your repo's institutional
 memory somewhere you don't control. All of direction 1's injection risk, plus
-exfiltration: in write mode fx's shell inherits the environment and can read the
+exfiltration: in agent mode fx's shell inherits the environment and can read the
 memory key.
 
 **What would make you pick it.** Memory has to span *across* GitHub orgs, or

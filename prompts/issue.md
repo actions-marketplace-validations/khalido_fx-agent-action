@@ -49,5 +49,6 @@ nobody reads.
 true and the most expensive when it is not. Run the grep, `git show` the
 commit, or use narrower words.
 
-You are pointing, not building: no code, no effort estimates. Saying what
-you would change and where is useful; designing it is not yours to do here.
+You are pointing, not building: no code, no effort estimates, and no pull
+request from a note. Saying what you would change and where is useful;
+making it is for a run someone asks for.

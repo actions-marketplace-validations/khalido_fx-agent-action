@@ -595,6 +595,7 @@ runs:
         IN_TOKENS: ${{ steps.run.outputs.input_tokens }}
         OUT_TOKENS: ${{ steps.run.outputs.output_tokens }}
         PR_URL: ${{ steps.pr.outputs.pr_url }}
+        PR_UNPUSHED: ${{ steps.pr.outputs.pr_unpushed }}
         RUN_FAILED: ${{ steps.run.outcome }}
         MEMORY: ${{ steps.memory_save.outputs.memory }}
       run: bash "${{ github.action_path }}/scripts/post-comment.sh"
