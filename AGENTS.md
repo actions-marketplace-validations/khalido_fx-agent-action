@@ -311,6 +311,15 @@ already have a retry helper?" parsed as a write request and handed a
 full-access shell to a question. A word that can be the first word of a
 question cannot also be the switch.
 
+The cost of that is a dead end, and the base block now closes it: nobody
+types `pr`, they type "fix this" or "update that", and read mode used to
+answer and stop with no sign a pull request was ever on offer. So a read run
+that was asked for a change says what it would change and ends with the line
+that would do it, naming the configured trigger — `/fx pr <what to build>`,
+or whatever `trigger` is set to. Only when `mode` is still `auto`: a run
+pinned to `mode: read` cannot open one however it is asked, and telling
+someone to type a phrase that will fail is worse than saying nothing.
+
 **The examples pin `@main`, not `@v1`, and that is on purpose.** v1.0.0 is
 tagged and the Marketplace listing points at it, so anyone who wants the
 compatibility promise can pin `@v1` and read `CHANGELOG.md` to see what a bump
