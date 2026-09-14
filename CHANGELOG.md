@@ -19,6 +19,11 @@ Copy [`examples/fx.yml`](examples/fx.yml), add the `AI_GATEWAY_API_KEY`
 secret, and for `/fx pr` switch on Settings → Actions → General → "Allow
 GitHub Actions to create and approve pull requests".
 
+**Pinning.** The examples say `@main` on purpose while this is young — a fix
+reaches you the day it lands. Pin `@v1` if you would rather have the
+compatibility promise: it moves to each `v1.x` as it ships, and this file says
+what changed.
+
 ### Added
 
 - **One job, three jobs' worth of behaviour.** The action tells a new issue
