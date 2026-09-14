@@ -299,6 +299,14 @@ already have a retry helper?" parsed as a write request and handed a
 full-access shell to a question. A word that can be the first word of a
 question cannot also be the switch.
 
+**The examples pin `@main`, not `@v1`, and that is on purpose.** v1.0.0 is
+tagged and the Marketplace listing points at it, so anyone who wants the
+compatibility promise can pin `@v1` and read `CHANGELOG.md` to see what a bump
+would mean. The file people copy still says `@main`, and so do KO's own repos:
+the action still moves weekly, and a fix should reach them the day it lands
+rather than waiting for a release. The pins move when the thing stops moving.
+Every consumer is a repo KO can reach, which is what makes this safe.
+
 **`github_token` is an input defaulting to `github.token`.** Bring your own App
 token for a named bot, and for CI to run on what it pushes. No hosted service,
 ever — that is the line between this and the opencode model.

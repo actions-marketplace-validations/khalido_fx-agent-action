@@ -15,6 +15,37 @@ is a judgement about compatibility, not about how much work went in.
 | **MINOR** | Something new that leaves today's behaviour alone: an input with a preserving default, an output, an example, a better answer from the same call. |
 | **PATCH** | A bug fixed, with no behaviour anyone could have relied on. A dependabot bump of an `actions/*` pin. |
 
+## What [SemVer](https://semver.org) actually requires
+
+The five rules that bite here, in its words and ours:
+
+- **A released version is immutable.** "Once a versioned package has been
+  released, the contents of that version MUST NOT be modified. Any
+  modifications MUST be released as a new version." So never retag a published
+  release — cut `vX.Y.Z+1`. The one carve-out: a tag whose release is still a
+  *draft* has been consumed by nobody and may still move, because nothing
+  points at it yet.
+- **1.0.0 defines the public API.** For this action that is: the input names
+  and their defaults, the output names, the trigger grammar (`/fx`, and `pr`
+  as the only write verb), the events it acts on, and the `permissions:` a
+  workflow must grant. Changing any of those is MAJOR. Everything else —
+  prompts, models, comment wording — is behaviour, judged by the table above.
+- **Reset the lower numbers.** MINOR resets PATCH to 0, MAJOR resets both.
+  `v1.2.3` → a new feature is `v1.3.0`, not `v1.3.3`.
+- **Pre-releases sort below the release.** `1.0.0-rc.1` < `1.0.0`, so an rc is
+  how to put a release in front of people without moving `v1`. GitHub's
+  `--prerelease` flag matches: `release-tag.yml` moves nothing for one.
+- **Deprecate in a MINOR, remove in the next MAJOR.** Renaming an input means
+  shipping both names for at least one minor, with the old one warning, rather
+  than breaking a workflow that passes the old name.
+
+**0.y.z was the other option and this repo did not take it.** "Major version
+zero is for initial development. Anything MAY change at any time." That is the
+honest signal for something still moving weekly — and it is why the examples
+can keep pinning `@main` while `v1` exists for anyone who wants the promise.
+If a release would be easier to explain as 0.x, that is a sign the API is not
+settled and the tag is writing a cheque.
+
 Two traps from this repo's own history: **a default is part of the contract**
 (dropping an input that never worked was still a break, because a workflow
 passing it now fails on an unknown input), and **a prompt change is a behaviour
@@ -98,13 +129,18 @@ commit within a minute.
 
 ### First release only
 
-**Flip every `@main` pin to `@v1` in the same commit as the changelog.** The
+**The examples stay on `@main`, deliberately, until KO says the action is
+baked.** v1.0.0 exists so anyone who wants the compatibility promise can pin
+`@v1`, but the file people copy still points at the branch this repo develops
+on, and so do KO's own repos — a fix reaches them the same day instead of
+waiting for a release. That is the 0.y.z argument above, spent on the pins
+rather than on the version number.
+
+When that changes, flip them all in one commit: `grep -rln
+"fx-agent-action@main" README.md docs examples .github` finds the eight —
 README, all five `examples/*.yml`, `docs/guide.md`, and the normalising `sed`
-in `.github/workflows/check.yml` — which turns `@main` into `uses: ./` for the
-dogfood-drift diff and fails the build if it is left behind. `grep -rln
-"fx-agent-action@main" README.md docs examples .github` is the list. The file
-people copy has to name the tag they should pin, not the branch this repo
-develops on.
+in `.github/workflows/check.yml`, which turns the pin into `uses: ./` for the
+dogfood-drift diff and fails the build if it is left behind.
 
 Then tell the consumers. Repos already running `@main` take every push to main
 on their next issue, which is the whole reason the tag exists; each one has a

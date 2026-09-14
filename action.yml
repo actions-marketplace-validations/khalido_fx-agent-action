@@ -1,5 +1,5 @@
 name: fx agent
-description: Answer a question or make the change, on a GitHub issue or PR. Reads the thread, works in your own runner, posts one comment. Read-only unless asked for a pull request.
+description: Answer a question or make the change, on a GitHub issue or PR. Read-only unless asked for a pull request.
 author: khalido
 branding:
   icon: message-square
