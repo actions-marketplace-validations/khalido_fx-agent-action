@@ -49,8 +49,8 @@ jobs:
           mode: read
           post: none
           # The actor is whoever opened the issue, and anyone can. Fine here:
-          # the prompt is fixed, the run cannot write, and the only thing it
-          # can do with the answer is pick from labels that already exist.
+          # the prompt is fixed, read mode has no shell and opens nothing, and
+          # the only thing the answer can do is pick from labels that exist.
           allowed_non_write_users: '*'
           prompt: |
             Pick the labels for this issue. Read `labels.txt` for the ones this

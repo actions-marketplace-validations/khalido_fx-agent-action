@@ -22,8 +22,7 @@ set -euo pipefail
 
 actor="${ACTOR:?}"
 event="${EVENT_NAME:?}"
-mode="${MODE:-auto}"                  # the action's mode input
-shell_tool="${SHELL_TOOL:-false}"     # the action's shell input
+mode="${MODE:-agent}"                 # the action's mode input
 sender_type="${SENDER_TYPE:-}"        # github.event.sender.type, empty on schedule
 err=$(mktemp)
 allow_users="${ALLOWED_NON_WRITE_USERS:-}"
@@ -88,12 +87,12 @@ esac
 
 # An allowed bot is an App installation, not a collaborator, so the permission
 # endpoint has nothing to say about it. But on these events the bot's own text
-# is the instruction, so it gets the same limits as an allowed stranger: read
-# mode, no shell. (On a schedule nothing the bot wrote is in the prompt, which
-# is why that case exited above.)
+# is the instruction, so it gets the same limit as an allowed stranger: read
+# mode, which has no shell and opens nothing. (On a schedule nothing the bot
+# wrote is in the prompt, which is why that case exited above.)
 if [ -n "$is_bot" ]; then
-  if [ "$mode" != "read" ] || [ "$shell_tool" = "true" ]; then
-    echo "::error::Bot $actor is allowed by allowed_bots, but mode is '$mode' and shell is '$shell_tool'. On an issue or PR event a bot only combines with mode: read and no shell." >&2
+  if [ "$mode" != "read" ]; then
+    echo "::error::Bot $actor is allowed by allowed_bots, but mode is '$mode'. On an issue or PR event a bot only combines with mode: read." >&2
     exit 1
   fi
   passed false
@@ -113,11 +112,11 @@ case "$permission" in
 esac
 
 if listed "$actor" "$allow_users"; then
-  # The exception is for a fixed prompt in read mode with no shell. `auto`
-  # would let this actor type `pr` and get the write tools, and a shell can
-  # read the gateway key out of the environment, so neither combines with it.
-  if [ "$mode" != "read" ] || [ "$shell_tool" = "true" ]; then
-    echo "::error::$actor is allowed by allowed_non_write_users, but mode is '$mode' and shell is '$shell_tool'. That exception only combines with mode: read and no shell." >&2
+  # The exception is for a fixed prompt in read mode. The agent's shell can
+  # read the gateway key out of the environment and its edits can end in a
+  # pull request, and neither belongs to someone who could not push.
+  if [ "$mode" != "read" ]; then
+    echo "::error::$actor is allowed by allowed_non_write_users, but mode is '$mode'. That exception only combines with mode: read." >&2
     exit 1
   fi
   echo "::warning::$actor has $permission access and is allowed by allowed_non_write_users." >&2
