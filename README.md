@@ -58,7 +58,9 @@ gh api -X PUT repos/OWNER/REPO/actions/permissions/workflow \
 That is the setup: an [AI Gateway](https://vercel.com/ai-gateway) key with
 its own budget, made with the [Vercel CLI](https://vercel.com/docs/cli), the
 secret, and the switch GitHub leaves off that lets a workflow open a pull
-request. The same file with comments is [`examples/fx.yml`](examples/fx.yml);
+request. `gh secret set` prompts for the key, which keeps it out of your shell
+history; a script or an agent doing this unattended passes `--body` or pipes it
+in. The same file with comments is [`examples/fx.yml`](examples/fx.yml);
 this repo runs it on itself. One job: the action tells a new issue from a
 `/fx` comment by the event, and a question from `pr` by the word. Only want
 answers? Drop the `issues:` trigger, set `contents: read` and `memory: false`.
