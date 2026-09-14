@@ -332,7 +332,7 @@ Every consumer is a repo KO can reach, which is what makes this safe.
 token for a named bot, and for CI to run on what it pushes. No hosted service,
 ever — that is the line between this and the opencode model.
 
-## fx facts checked against 0.0.9
+## fx facts checked against 0.0.10
 
 Verified against the binary, so nobody re-checks them from memory. Recheck
 when fx's version in a footer moves.
@@ -360,6 +360,18 @@ when fx's version in a footer moves.
   `tool_results[].{tool_call_id,tool_name,status,output,preview,truncated,
   output_bytes,stored_output_bytes,provider_native,permission_feedback}`.
   When the version moves, that file is what breaks.
+- **0.0.10 changed nothing this action depends on.** Rechecked on the day it
+  shipped: `execution.schema_version` is still 3 and `session-html.py` renders
+  a 0.0.10 session, `fx ask`'s flags are identical, and the top-level command
+  list is unchanged. Its headline is speed — turns up to 1.6× faster, model
+  requests starting up to 2.5× faster — which on a private repo is billed
+  runner minutes, so watch the footer's seconds against the 0.0.9 baseline of
+  56–125s for a note. Nothing to change: the cache is keyed on the resolved
+  release tag (`action.yml:284`), so a new release busts it and CI installs
+  0.0.10 by itself. One improvement worth watching rather than acting on:
+  "shell failures now give the model clearer recovery guidance" — a 0.0.9 run
+  burned about five steps flailing on a stub script, and scratch mode is where
+  that shows up.
 - **The workspace's `AGENTS.md` is in context before the first tool call.**
   Measured: `fx ask` a question about this repo's own file answers in 0 steps.
   So an instruction to "read AGENTS.md" buys a tool call for text the model
