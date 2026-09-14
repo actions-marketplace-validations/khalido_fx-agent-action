@@ -372,9 +372,15 @@ when fx's version in a footer moves.
 - **`fx issue` exists as of 0.0.9**, `fx issue [--auto] [--create] [context]`,
   and it publishes through `gh` exactly as `fx pr --create` does. Same verdict:
   the action drafts and creates with `gh` itself, so there is nothing to adopt.
-- **Subagents can carry their own model and reasoning effort** (0.0.9). That
-  is chosen in the request, not in config, so the action has nothing to set;
-  a cheap model steering an expensive one is a prompt's decision.
+- **Subagents work in `fx ask`, and the prompt says nothing about them.**
+  Measured on 0.0.9: "run two subagents in parallel, one per file" produced two
+  `subagent` tool calls inside one step, headless. Left unmentioned on purpose
+  — notes finish in 6 to 32 steps against a cap of 60, so nothing here is step
+  starved, and a delegate-by-default hint on a flash model buys tokens for
+  nothing. Revisit if runs start hitting the cap. 0.0.9's changelog says a
+  subagent can carry its own model and effort while the docs page still says
+  the child inherits the parent's; which one the binary does is unverified,
+  and nothing in the action depends on the answer.
 - **`effort` now bites, and it is the one setting the Configure step cannot
   assert.** The input defaults to empty and the step adds `effort` to the
   settings file only when it is set, so an ordinary run is fx's `auto`. 0.0.9
