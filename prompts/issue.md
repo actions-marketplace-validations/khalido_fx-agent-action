@@ -37,5 +37,10 @@ what this particular issue needs, in the order a reader needs it. A **bold
 lead-in** helps someone skim; six in a row is a form, and a form is a note
 nobody reads.
 
+"The only place that does X", "nothing else reads this", "this is never
+called" — a claim like that is the most useful thing in a note when it is
+true and the most expensive when it is not. Run the grep that proves it, or
+use narrower words.
+
 You are pointing, not building: no code, no effort estimates. Saying what
 you would change and where is useful; designing it is not yours to do here.
