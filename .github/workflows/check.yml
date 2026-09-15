@@ -57,6 +57,16 @@ jobs:
           test -s issues.json || { echo '::error::issues.json was not written'; exit 1; }
           rm issues.json
 
+          # The built-in note IN READ MODE, which is the pairing #16 was about
+          # and the one nothing covered: the note tells the model to grep and
+          # to run git log, and read mode has no shell. The base block has to
+          # say so in the same prompt, or the note keeps the shape of one that
+          # checked and checks nothing.
+          INPUT_MODE='read' INPUT_PROMPT_FILE=.github/fx/issue.md bash scripts/build-prompt.sh
+          grep -q 'The note is a head start' "$RUNNER_TEMP/fx-prompt.md"
+          grep -q 'read the files instead' "$RUNNER_TEMP/fx-prompt.md"
+          rm -f issues.json
+
       # The other path: a comment. The default mode is the agent, and the base
       # block must carry the ship-or-note judgement and name the skill. This
       # is the path v1.0.0 shipped broken for three days, because nothing
