@@ -182,6 +182,7 @@ All optional.
 | `session_artifact` | `true` | The run as one HTML file on the run page. |
 | `github_token` | the workflow's | An App token for a named bot and CI on its PRs; [guide](docs/guide.md#a-bot-with-its-own-name). |
 | `include_thread`, `include_diff` | `true` | What the agent sees besides title and body. |
+| ~~`shell`~~, ~~`pr_model`~~ | | Removed in 2.0.0. Passing either fails the run and names the replacement; `shell: true` + `mode: read` is now `mode: answer`. |
 | `issue_number`, `branch_prefix`, `working_directory` | | See [`action.yml`](action.yml). |
 
 Outputs: `response`, `cost`, `steps`, `session_id`, `comment_url`, `pr_url`.

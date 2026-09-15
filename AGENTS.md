@@ -117,6 +117,19 @@ commands it cannot run. The built-in note tells the model to grep, to
 without that warning it keeps the shape of a checked note and checks nothing
 (#16).
 
+**A removed input stays declared, so passing it fails loudly.** GitHub warns
+on an input an action does not declare and then runs anyway, so removing
+`shell` outright would have left every `mode: read` + `shell: true` job green
+and quietly shell-less. `shell` and `pr_model` are therefore still in
+`inputs:`, doing nothing but being refused by the `Check the inputs` step,
+which runs before anything is installed or any API is called. The messages
+are per value, not per input: `shell: false` migrates to `mode: read`, and
+telling that user to "drop the line" would hand them the shell they
+explicitly refused. Delete both in 3.0.0. This is the repo's own release rule
+("deprecate in a MINOR, remove in the next MAJOR") applied to a MAJOR that
+had nowhere earlier to deprecate in. Asked for by the everx-crm session as
+the consumer who rides `@main`: one red run beats silent drift.
+
 **Rules go in the global settings file, not a workspace profile.** The checkout
 path changes between runs, so a workspace-scoped rule silently would not apply.
 

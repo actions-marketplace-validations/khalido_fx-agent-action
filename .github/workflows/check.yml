@@ -110,6 +110,16 @@ jobs:
             echo '::error::mode=write was accepted; it should be refused'; exit 1
           fi
 
+      # The removed inputs are declared on purpose, so a workflow that passes
+      # one gets an error instead of GitHub's ignorable warning. Deleting them
+      # is a 3.0.0 job; until then this fails if they go early.
+      - name: removed inputs are still refused, not ignored
+        run: |
+          for i in shell pr_model; do
+            grep -qE "^  $i:" action.yml || { echo "::error::action.yml no longer declares '$i'; a workflow passing it gets a warning and a green run. Keep it until 3.0.0."; exit 1; }
+          done
+          grep -q 'name: Check the inputs' action.yml || { echo '::error::the Check the inputs step is gone'; exit 1; }
+
       - name: skills have name and description
         run: |
           for f in skills/*/SKILL.md; do

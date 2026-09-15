@@ -47,6 +47,12 @@ break and how a release is cut.
   `mode: read` alone now denies the shell, so a note would keep its shape and
   quietly stop verifying anything. `read` stays the only mode that combines
   with `allowed_non_write_users` or `allowed_bots` on issue and PR events.
+- **Passing any of them fails the run on its first step, with the migration in
+  the error.** GitHub only warns on an input an action does not declare, and a
+  warning on a green run is a line in a log nobody reads, so `shell` and
+  `pr_model` are still declared purely to refuse them — including
+  `shell: false`, whose migration is `mode: read` and not "drop the line".
+  They go for good in 3.0.0.
 - `/fx pr` as the phrase that turned writing on. `/fx pr add X` still works;
   it now reads as "add X".
 

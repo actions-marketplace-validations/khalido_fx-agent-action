@@ -53,6 +53,22 @@ inputs:
       stranger or a bot may trigger.
     required: false
     default: agent
+
+  # Removed in 2.0.0, still DECLARED so a workflow that passes one gets a red
+  # run with a migration message rather than GitHub's "unexpected input"
+  # warning, which is a line in a log nobody reads on a green run. A removed
+  # input is loud; a removed COMBINATION of inputs was silent, which is how
+  # `mode: read` + `shell: true` nearly lost its shell without telling anyone.
+  # Delete these two in 3.0.0, by which time the error has been there a major.
+  shell:
+    description: 'Removed in 2.0.0. `shell: true` with `mode: read` is now `mode: answer`; otherwise drop it, the default mode has a shell.'
+    required: false
+    default: ''
+  pr_model:
+    description: 'Removed in 2.0.0. One model per run now, because a run no longer knows in advance whether it will open a pull request. Use `model`.'
+    required: false
+    default: ''
+
   memory:
     description: >-
       A memory across runs, on by default: one `MEMORY.md` on an orphan
@@ -213,6 +229,55 @@ outputs:
 runs:
   using: composite
   steps:
+    # Before anything is installed or any API is called: refuse a workflow
+    # written against 1.x. GitHub only WARNS on an input an action does not
+    # declare, so a removed input leaves a green run doing something subtly
+    # different — which is exactly how this action nearly took the shell away
+    # from every `mode: read` + `shell: true` job without failing once.
+    - name: Check the inputs
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        SHELL_INPUT: ${{ inputs.shell }}
+        PR_MODEL: ${{ inputs.pr_model }}
+      run: |
+        set -euo pipefail
+        bad=0
+        # `false` is not the same migration as `true`: someone who wrote
+        # `shell: false` asked for NO shell, and dropping the line now hands
+        # them one. Say the right thing for each.
+        case "$SHELL_INPUT" in
+          '') ;;
+          false|False|FALSE|no|'0')
+            echo "::error::The \`shell\` input was removed in 2.0.0, and dropping the line is NOT your migration: you asked for no shell, and the default \`agent\` mode has one. Use \`mode: read\` to keep a run with no shell and no pull request, or \`mode: answer\` if you want the shell after all but never a pull request. See CHANGELOG.md." >&2
+            bad=1
+            ;;
+          *)
+            echo "::error::The \`shell\` input was removed in 2.0.0. If you had \`shell: true\` with \`mode: read\`, that pair is now \`mode: answer\` — the same shell, and it still opens nothing. With any other mode, drop the line: the default \`agent\` mode has the shell. See CHANGELOG.md." >&2
+            bad=1
+            ;;
+        esac
+        if [ -n "$PR_MODEL" ]; then
+          echo "::error::The \`pr_model\` input was removed in 2.0.0. There is one model per run now, because a run no longer knows in advance whether it will open a pull request. Set \`model\` instead. See CHANGELOG.md." >&2
+          bad=1
+        fi
+        case "${MODE:-agent}" in
+          agent|answer|read) ;;
+          write)
+            echo "::error::\`mode: write\` was removed in 2.0.0. The default \`agent\` mode is what it did: a shell, edits, and a draft pull request — decided by the agent now rather than forced by the job. Drop the line. See CHANGELOG.md." >&2
+            bad=1
+            ;;
+          auto)
+            echo "::error::\`mode: auto\` was removed in 2.0.0. It meant \"let the \`pr\` verb decide\", and there is no verb left to decide with. Drop the line for the default \`agent\` mode, or set \`answer\` (shell, never opens anything) or \`read\` (neither). See CHANGELOG.md." >&2
+            bad=1
+            ;;
+          *)
+            echo "::error::mode must be agent, answer or read (got '$MODE')." >&2
+            bad=1
+            ;;
+        esac
+        [ "$bad" = 0 ] || exit 1
+
     # Two checks before anything else, and the run fails if either says no:
     # write access on issue and PR events, and a human (or listed bot) on every
     # event. The workflow's `if:` is still worth having — it saves booting a
