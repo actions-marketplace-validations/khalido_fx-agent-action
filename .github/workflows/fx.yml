@@ -52,6 +52,12 @@ jobs:
     # booting a runner; the action checks both again and fails the run if
     # either is wrong. On an issue event the note runs; on a comment, the
     # phrase has to be there.
+    #
+    # `startsWith` or a leading space, not a bare `contains`: expressions have
+    # no regex, and a plain `contains(body, '/fx')` also matches a comment that
+    # merely mentions a path like `.github/fx/issue.md`. That only costs a
+    # runner boot — the action skips a comment it was not addressed in — but
+    # there is no reason to pay it. Both functions are case-insensitive.
     if: >-
       (
         github.event_name == 'issues' &&
@@ -59,7 +65,8 @@ jobs:
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
       ) || (
         github.event_name == 'issue_comment' &&
-        contains(github.event.comment.body, '/fx') &&
+        (startsWith(github.event.comment.body, '/fx') ||
+         contains(github.event.comment.body, ' /fx')) &&
         github.event.comment.user.type != 'Bot' &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
       ) || github.event_name == 'workflow_dispatch'

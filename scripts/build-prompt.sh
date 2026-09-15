@@ -103,8 +103,24 @@ if not found:
 print(text[found.end():].lstrip(' \t\n.,!?;:'), end='')
 PY
   ); then
-    echo "::error::The comment does not contain '$trigger' outside a quote. Gate the job with: if: contains(github.event.comment.body, '$first')" >&2
-    exit 1
+    # Not addressed to us. This is a SKIP, not a failure, and the reason is
+    # structural: the workflow's `if:` is a substring test and this is a
+    # whole-word parse that ignores quoted lines, so the two can always
+    # disagree. Every failure this action ever had on its own repo — three of
+    # three — was a comment that merely mentioned a path like
+    # `.github/fx/issue.md`, and a red X on someone's thread for a comment
+    # that was never addressed to the agent is the wrong answer. The warning
+    # still says how to tighten the gate, because a job that boots a runner
+    # on every comment is worth knowing about.
+    {
+      echo "skip=no-trigger"
+      echo "prompt_path="
+      echo "mode="
+      echo "issue_number="
+    } >> "$GITHUB_OUTPUT"
+    echo "::warning::No '$first' in this comment outside a quoted line, so there is nothing to answer. If that is a surprise, the job's \`if:\` is a substring test and this is a whole-word match — tighten it to: if: startsWith(github.event.comment.body, '$first') || contains(github.event.comment.body, ' $first')" >&2
+    echo "Nothing to do: no trigger phrase in the comment." >&2
+    exit 0
   fi
   # "cc /fx" is the phrase with no request. Say so instead of billing a
   # model call for nothing; the thread block alone is not an instruction.

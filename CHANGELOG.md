@@ -63,6 +63,14 @@ break and how a release is cut.
 
 ### Fixed
 
+- **A comment that was never addressed to the agent is a skip, not a red X.**
+  The workflow's `if:` is a substring test and the action's trigger match is a
+  whole word outside quoted lines, so the two can disagree and a correct
+  workflow lands in the gap — a comment merely mentioning a path like
+  `.github/fx/issue.md` was enough. Every failed run this action ever had on
+  its own repo, three of three, was that. It now warns, says how to tighten
+  the gate, and posts nothing. The shipped examples use the tighter gate:
+  `startsWith(body, '/fx') || contains(body, ' /fx')`.
 - **The push refuses to target the default branch.** It never did — the branch
   name is built here — but that was an emergent property rather than an
   asserted one, and a private repo on the free plan cannot have branch

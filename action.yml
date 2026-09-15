@@ -437,6 +437,7 @@ runs:
     # names are the right ones; `edit` and `shell` are the two measured to bind.
     - name: Configure fx
       id: configure
+      if: ${{ steps.context.outputs.skip == '' }}
       shell: bash
       env:
         MODE: ${{ steps.context.outputs.mode }}
@@ -542,6 +543,7 @@ runs:
 
     - name: Run fx
       id: run
+      if: ${{ steps.context.outputs.skip == '' }}
       shell: bash
       working-directory: ${{ inputs.working_directory }}
       env:
@@ -638,7 +640,7 @@ runs:
     # what future runs read. Deterministic, in the workflow, not the prompt.
     - name: Save memory
       id: memory_save
-      if: ${{ !cancelled() && steps.integrity.outcome != 'failure' && steps.memory.outputs.memory_path != '' && steps.actor.outputs.write_access == 'true' }}
+      if: ${{ !cancelled() && steps.integrity.outcome != 'failure' && steps.context.outputs.skip == '' && steps.memory.outputs.memory_path != '' && steps.actor.outputs.write_access == 'true' }}
       shell: bash
       working-directory: ${{ inputs.working_directory }}
       env:

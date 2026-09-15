@@ -50,6 +50,20 @@ that saves booting a runner, but `MEMBER` means org member, not write, so it
 is not the check. `gh api` prints a 4xx body to *stdout*, so the fallback goes
 in an `||` on the assignment, never `|| echo` inside the substitution.
 
+**A comment with no trigger is a skip; a trigger with no request is an
+error.** Those look alike and are not. The first means the workflow's `if:`
+and this parse disagreed — the gate is `contains`, a substring test, and the
+parse is a whole word outside quoted lines, so a comment that merely mentions
+`.github/fx/issue.md` passes one and fails the other. That is structural, it
+will keep happening, and it was every single failure this action ever had on
+its own repo: three of three, two of them written by the agent maintaining it.
+The second means someone typed the phrase and stopped, which is worth a red X
+because the person who typed it can fix it. The old reasoning here — "reaching
+here without the phrase means the gate is missing, and a runner is being paid
+for on every comment" — assumed the only way to arrive was a missing gate, and
+that was wrong; the warning covers the runner-cost case without spraying red
+Xs on threads. Reported by the everx-crm session, 2026-09-15.
+
 **The trigger is a phrase matched anywhere in the comment, not a prefix.**
 Whole word, any case, `(^|\s)(?:/fx|…)(?=[\s.,!?;:]|$)`, the same regex shape
 `claude-code-action` uses for `@claude`; `trigger` may be a comma-separated

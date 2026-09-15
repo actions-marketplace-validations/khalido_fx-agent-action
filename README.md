@@ -26,7 +26,7 @@ jobs:
     if: >-
       (github.event_name == 'issues' && github.event.issue.user.type != 'Bot' &&
        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
-      || (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/fx') &&
+      || (github.event_name == 'issue_comment' && (startsWith(github.event.comment.body, '/fx') || contains(github.event.comment.body, ' /fx')) &&
           github.event.comment.user.type != 'Bot' &&
           contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
@@ -208,7 +208,12 @@ a total.
 
 The thread goes to the model as evidence, with hidden markup stripped. The
 workflow's `permissions:` block decides what the agent can do, not this action,
-and branch protection is what makes "at most a draft PR" true. The agent reads
+and branch protection is what makes "at most a draft PR" true. Since the agent
+decides for itself when a request is worth shipping, more runs reach the push
+than when a keyword was needed, so the trust boundary is everyone with write
+access to the repo rather than everyone with write access who also typed the
+word. On a private repo that is usually the point; on a public one, read the
+actor checks below. The agent reads
 your repo's `AGENTS.md` and sees every skill folder in it, the same ones your
 laptop agent uses. Anyone who can trigger a run can spend the key, so give the
 key its own budget. The [guide](docs/guide.md#before-you-turn-it-on) has the

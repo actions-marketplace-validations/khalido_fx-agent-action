@@ -105,6 +105,19 @@ jobs:
           grep -q 'read the files instead' "$prompt"
           MODE='read' absent 'open-pr skill' "$prompt"
 
+          # A comment that merely MENTIONS a path containing the phrase is not
+          # addressed to us: skip, do not fail. Every failure this action ever
+          # had on its own repo was this.
+          echo '{"action":"created","comment":{"id":1,"body":"see .github/fx/issue.md"}}' > "$GITHUB_EVENT_PATH"
+          MODE=skip bash scripts/build-prompt.sh
+          grep -qx 'skip=no-trigger' "$GITHUB_OUTPUT"
+          echo '{"action":"created","comment":{"id":1,"body":"hey /fx, fix it"}}' > "$GITHUB_EVENT_PATH"
+          : > "$GITHUB_OUTPUT"
+          MODE=agent bash scripts/build-prompt.sh
+          if grep -q '^skip=' "$GITHUB_OUTPUT"; then
+            echo '::error::a real trigger was treated as a skip'; exit 1
+          fi
+
           # a mode that does not exist fails loudly rather than defaulting.
           if INPUT_MODE='write' bash scripts/build-prompt.sh 2>/dev/null; then
             echo '::error::mode=write was accepted; it should be refused'; exit 1
