@@ -125,6 +125,22 @@ git commit -q -m "$title" -m "Opened by fx from #${ISSUE_NUMBER:-} · run ${GITH
 # GITHUB_SERVER_URL rather than a hard-coded github.com, so this works on
 # GitHub Enterprise Server too.
 host="${GITHUB_SERVER_URL:-https://github.com}"; host="${host#https://}"
+
+# The push target is a branch this script computed, so it is never the default
+# branch — and this asserts it rather than trusting it. Branch protection is
+# the real guard and a private repo on the free plan cannot have one: GitHub
+# answers 403 "Upgrade to GitHub Pro" to both the branch-protection and the
+# ruleset APIs. Three of this action's four consumers are in that position and
+# one of them deploys the default branch to production on push, so the cost of
+# this being wrong once is someone's live site. Asked for by the
+# syntechfibres.dev session, 2026-09-15.
+default_branch="${DEFAULT_BRANCH:-}"
+[ -n "$default_branch" ] || default_branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch 2>/dev/null || true)
+if [ -n "$default_branch" ] && [ "$branch" = "$default_branch" ]; then
+  echo "::error::Refusing to push: the branch this run built ('$branch') is the repository's default branch. This action only ever pushes to a new branch; something upstream of here is wrong." >&2
+  exit 1
+fi
+
 # A job with `contents: read` cannot push, and that is the off switch for pull
 # requests: say so in the comment rather than fail a step the answer already
 # describes as shipped. Any other push failure is still an error.
