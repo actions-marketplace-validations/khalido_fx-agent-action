@@ -41,13 +41,16 @@ inputs:
     default: deepseek/deepseek-v4.1-flash
   mode:
     description: >-
-      `agent` (default) is the one agent: it reads, searches, runs commands
-      and edits the checkout, and when it was asked to change something and
-      the change is ready it opens a draft pull request through the open-pr
-      skill. Nothing else it does to the checkout is kept. `read` DENIES the
-      edit and shell tools outright, so the model never sees them, and can
-      open nothing: for a fixed prompt on a job that strangers or bots may
-      trigger.
+      What this job's runs may do. `agent` (default) ships: it reads,
+      searches, runs commands and edits the checkout, and when it was asked
+      to change something and the change is ready it opens a draft pull
+      request through the open-pr skill. `answer` verifies: the same shell and
+      edits, so it can run your tests before it answers, but the checkout is
+      scratch paper and nothing is ever committed or opened — for a repo where
+      pull requests from the agent are off for good. `read` only reads: the
+      edit and shell tools are DENIED outright, so the model never sees them
+      and nothing can read the runner's environment — the only mode a
+      stranger or a bot may trigger.
     required: false
     default: agent
   memory:
@@ -333,18 +336,20 @@ runs:
     # `models.gateway`. Setting it here rather than through FX_MODEL keeps one
     # owner for the value.
     #
-    # One permission mode, `auto`, and two rule sets:
+    # One permission mode, `auto`, and two rule sets. The rules only decide
+    # whether the agent has a shell; whether it may OPEN anything is the PR
+    # step's business, which is why `answer` and `agent` share a rule set.
     #
-    #  agent — edit and shell ALLOWED by rule. Allow rules rather than leaving
-    #          it to `auto`, because auto's review is a billed helper call per
+    #  agent,  edit and shell ALLOWED by rule. Allow rules rather than leaving
+    #  answer  it to `auto`, because auto's review is a billed helper call per
     #          unresolved action. The runner is a throwaway container and the
     #          real boundary is the workflow's token scope: fx never holds it,
-    #          and the tree only leaves the runner as a draft PR.
+    #          and the tree only leaves the runner as a draft PR, in `agent`.
     #  read  — edit and shell DENIED by rule. The rules HIDE those tools from
     #          the model, so it never spends a step discovering it cannot
     #          write and the run still exits 0. A model with no shell cannot
     #          read the runner's environment back to you, which is why this
-    #          is the mode for strangers and bots.
+    #          is the only mode a stranger or a bot may trigger.
     #
     # Never `full-access`: it disables the checks the rules ride on, and there
     # is nothing it would add that the allow rules do not.
@@ -444,7 +449,7 @@ runs:
     # to stop it. Read mode cannot write to disk, so it is skipped there.
     - name: Fingerprint the action
       id: fingerprint
-      if: ${{ steps.context.outputs.mode == 'agent' }}
+      if: ${{ steps.context.outputs.mode != 'read' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -484,7 +489,7 @@ runs:
     # token runs a file from that directory.
     - name: Check the action's own files
       id: integrity
-      if: ${{ !cancelled() && steps.context.outputs.mode == 'agent' }}
+      if: ${{ !cancelled() && steps.context.outputs.mode != 'read' }}
       shell: bash
       env:
         BEFORE: ${{ steps.fingerprint.outputs.action_files }}

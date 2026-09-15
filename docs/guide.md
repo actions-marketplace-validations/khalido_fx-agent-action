@@ -26,15 +26,20 @@ Working on the action itself is a different job; that is [`AGENTS.md`](../AGENTS
    fx, model, tokens, cost in cents, seconds, a link to the run.
 9. **Uploads the session** as one HTML file, kept a week.
 
-## Two modes
+## Three modes
 
-| | agent (default) | read |
-|---|---|---|
-| read files, search the web | yes | yes |
-| run commands, edit files | yes | no |
-| commit, push, PR | draft PR, when it decides to ship | no |
-| fx permission rules | edit and shell allowed | edit and shell denied |
-| needs | `contents: write`, `pull-requests: write` for PRs; `contents: read` for answers only | `contents: read` |
+| | agent (default) | answer | read |
+|---|---|---|---|
+| read files, search the web | yes | yes | yes |
+| run commands, edit files | yes | yes, thrown away | no |
+| commit, push, PR | draft PR, when it decides to ship | no | no |
+| fx permission rules | edit and shell allowed | edit and shell allowed | edit and shell denied |
+| a stranger or bot may trigger it | no | no | yes, with `allowed_non_write_users` or `allowed_bots` |
+| needs | `contents: write`, `pull-requests: write` | `contents: read` | `contents: read` |
+
+Two capabilities come apart here — a shell, and a pull request — and three of
+the four combinations are worth having. Each mode is one step down from the
+last.
 
 **Agent** is one agent with a shell and edits, every run. It reads the
 thread, tries things in the checkout, runs the tests, and decides what the
@@ -45,24 +50,41 @@ and the action does the branch, the push and the PR; no file, or an
 unchanged tree, and nothing opens. When the change is bigger than a run or
 needs a decision, the base block tells it to leave a pointed note for a
 stronger agent or a person instead. Nothing else it does to the checkout is
-kept. With `contents: read` on the job the push fails, the edits are thrown
-away, and the comment carries a line saying the agent asked for a pull
-request the job could not push; that is the off switch for pull requests,
-and `mode: read` is the one that also takes the shell away.
+kept. There are two off switches for pull requests and they work at
+different levels. `mode: answer` is the polite one: the agent is never told
+to ship, so it does not spend the run building something that gets thrown
+away. `contents: read` is the hard one: the agent may try, the push fails,
+the edits are discarded and the comment carries a line saying the job could
+not push. Use `mode: answer` to say what you want and `contents: read` to
+make it true; a repo that never wants a PR should set both.
+
+**Answer** is the same agent with the pull request taken away. It has the
+shell and the edits, so it runs your tests, writes a repro and tries the fix
+before it answers, and the checkout is scratch paper every time: nothing is
+committed, pushed or opened, and the prompt tells it so rather than telling
+it to ship. Pick this when pull requests from the agent are off for good —
+`main` deploys on push, or the repo has no branch protection to fall back
+on — and you still want answers that were checked rather than guessed.
 
 **Read** is for a fixed prompt on a job that strangers or bots may trigger.
 The edit and shell tools are hidden from the model by rule, so it never
 spends a step finding out, and a model with no shell cannot read the
-runner's environment. It can open nothing.
+runner's environment. It can open nothing. It is the only mode
+`allowed_non_write_users` and `allowed_bots` combine with, and the base
+block warns the model that instructions below it may name commands it cannot
+run, so a note says a claim is unverified instead of implying it checked.
 
 Check out with `fetch-depth: 0`, as the examples do. The default shallow
 clone leaves `git log` and `git blame` with one commit, and "this used to
 work, what changed?" is the question history answers. A full clone of an
 ordinary repo costs a second or two; set a depth only on a very large one.
 
-What the shell changes is exposure: it can read the runner's environment,
-gateway key included, so the agent mode does not combine with
-`allowed_non_write_users` or with bots on issue events. The real boundary
+What the shell changes is exposure: fx needs the gateway key in its own
+environment to call the model, and fx's shell tool is fx's child process, so
+anything with a shell can reach that key. There is no way to have one without
+the other. That is the whole reason `read` exists, and why neither `agent`
+nor `answer` combines with `allowed_non_write_users` or with bots on issue
+events. The real boundary
 around what the agent can do to the repository is the workflow's
 `permissions:` block, not fx's review layer, which is why the rules are
 allow rules and not `auto`'s billed review call per action.

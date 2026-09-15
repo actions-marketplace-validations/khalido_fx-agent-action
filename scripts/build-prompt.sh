@@ -126,13 +126,17 @@ p = sys.argv[1]; t = open(p, encoding='utf-8', errors='replace').read()
 open(p, 'w', encoding='utf-8').write(sanitize.hide_only(t))" "$instruction" "$(dirname "$0")"
 fi
 
-# --- agent or read -----------------------------------------------------------
-# `agent` is the one agent: shell and edits, and a pull request when it decides
-# the change is worth shipping. `read` denies both tools and can open nothing;
-# it is for a fixed prompt on a stranger-facing job.
+# --- what this run may do ----------------------------------------------------
+# Three values, each one a step down, because there are two capabilities that
+# come apart — a shell and a pull request — and three of the four combinations
+# are wanted:
+#   agent   shell and edits, and a pull request when it decides to ship
+#   answer  shell and edits, and nothing ships: the checkout is scratch paper
+#   read    neither tool, so nothing ships and nothing can read the gateway
+#           key out of the environment. The only one a stranger or a bot gets.
 case "${INPUT_MODE:-agent}" in
-  agent|read) mode="${INPUT_MODE:-agent}" ;;
-  *) echo "::error::mode must be agent or read (got '${INPUT_MODE:-}')" >&2; exit 1 ;;
+  agent|answer|read) mode="${INPUT_MODE:-agent}" ;;
+  *) echo "::error::mode must be agent, answer or read (got '${INPUT_MODE:-}')" >&2; exit 1 ;;
 esac
 
 # --- 1. where it is running --------------------------------------------------
@@ -160,7 +164,8 @@ off.
 
 TXT
 
-  if [ "$mode" = "agent" ]; then
+  case "$mode" in
+  agent)
     cat <<'TXT'
 You can read the repository, search the web, run commands and edit files: git
 log and git blame, the tests, a repro, a fix. The runner is thrown away when
@@ -168,13 +173,30 @@ you finish. Nothing you do to the checkout is kept unless you ship it as a
 pull request, so an experiment costs nothing and a change you do not ship is
 just something you learned from.
 TXT
-  else
+    ;;
+  answer)
+    cat <<'TXT'
+You can read the repository, search the web, run commands and edit files: git
+log and git blame, the tests, a repro, a fix to see whether it holds. The
+checkout is scratch paper. Nothing you do to it is kept, committed or pushed,
+and this run cannot open a pull request, so try things freely and report what
+you found rather than what you changed.
+TXT
+    ;;
+  *)
+    # The last sentence is for the instruction below: the built-in note, and
+    # most hand-written prompts, tell the agent to grep, run `git log -S` or
+    # run the repo's checks. In this mode it cannot, and a note that keeps its
+    # shape while quietly verifying nothing is worse than one that says so.
     cat <<'TXT'
 You can read the repository and search the web. You cannot edit files or run
 commands: those tools are switched off, so do not plan around them, and this
-run cannot open a pull request.
+run cannot open a pull request. Where the instructions below tell you to run
+something — a grep, git log, the tests — read the files instead, and say that
+a claim is unverified rather than implying you checked it.
 TXT
-  fi
+    ;;
+  esac
   cat <<'TXT'
 
 This repository's own AGENTS.md is already in your context; read CLAUDE.md if
@@ -192,7 +214,8 @@ TXT
   # writes. The tree diff has to be non-empty too, so prose alone opens
   # nothing. Kept short here, because it rides on every run; the mechanics
   # load only when the skill is invoked.
-  if [ "$mode" = "agent" ]; then
+  case "$mode" in
+  agent)
     cat <<'TXT'
 
 Decide what this run should produce. A question gets an answer. A request to
@@ -207,16 +230,29 @@ say what you found, what you would change and where, and what a stronger
 agent or a person should pick up. A pointed note is a good outcome, and a
 half-built change is not.
 TXT
-  else
+    ;;
+  answer)
+    cat <<'TXT'
+
+If you were asked to change something rather than explain it, make the change
+here to find out whether it works — then say what you would change and where,
+and what you ran to check it. This run ships nothing, so the change itself is
+evidence, not a deliverable: a paragraph that says "this fix passes the
+tests, here is the one line" is worth more than the diff you cannot hand
+over. A person or a stronger agent opens the pull request.
+TXT
+    ;;
+  *)
     cat <<'TXT'
 
 If you were asked to change something rather than explain it, say what you
 would change and where; someone else opens the pull request.
 TXT
-  fi
+    ;;
+  esac
 
   if [ -n "${MEMORY_PATH:-}" ]; then
-    if [ "$mode" = "agent" ] && [ "${MEMORY_WRITABLE:-true}" = "true" ]; then
+    if [ "$mode" != "read" ] && [ "${MEMORY_WRITABLE:-true}" = "true" ]; then
       cat <<TXT
 
 \`$MEMORY_PATH\` is your memory from earlier runs on this repository; its text

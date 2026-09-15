@@ -67,23 +67,38 @@ what is presumably the same reason; the two that use `@` own the handle.
 `@fx-agent` was unclaimed when this was written and works as a `trigger` value
 for anyone who prefers a mention.
 
-**One agent, one permission mode, two rule sets.** Every run is `auto` in
-`~/.fx/settings.json`. Agent mode, the default, allows `edit` and `shell` by
-rule: allow rules rather than leaving it to `auto`, because auto's review is a
-billed helper call per unresolved action, and **the real boundary is the
-workflow's `permissions:` block, not fx's review layer**. Read mode denies
-both; the rules hide those tools, so the model never spends a step finding
-out and the run exits 0, and a model with no shell cannot read the gateway
-key out of the environment, which is why `check-actor.sh` allows a stranger
-or a bot only in read mode. Never `full-access`: it disables the checks the
-rules ride on, and there is nothing it adds that the allow rules do not. (It
-was the write mode until 2026-09-14, and fx stores and reports it as `yolo`,
-on purpose and permanently; if it ever comes back, that is why the read-back
-would want `yolo`.)
+**One agent, three modes, and the modes are not three mechanisms.** Every run
+is `auto` in `~/.fx/settings.json`. `agent` and `answer` allow `edit` and
+`shell` by rule — allow rules rather than leaving it to `auto`, because auto's
+review is a billed helper call per unresolved action — and differ only in
+whether the PR step runs and what the base block tells the model. `read`
+denies both; the rules hide those tools, so the model never spends a step
+finding out and the run exits 0. Never `full-access`: it disables the checks
+the rules ride on, and there is nothing it adds that the allow rules do not.
+(It was the write mode until 2026-09-14, and fx stores and reports it as
+`yolo`, on purpose and permanently; if it ever comes back, that is why the
+read-back would want `yolo`.)
+
+**Why three and not one.** Two capabilities come apart, a shell and a pull
+request, and three of the four combinations are wanted: ship, verify but
+never ship, read only. The fourth is nonsense, which is why this is one input
+with three ordered values rather than two booleans. `read` cannot be
+collapsed away: fx needs the gateway key in its environment to call the model
+and fx's shell is fx's child process, so **a shell and a reachable key are
+the same thing**, and `read` is the only mode that can be handed to someone
+who could not already push. `triage.yml` (`allowed_non_write_users: '*'`),
+`pr-review.yml` (`allowed_bots: dependabot`) and the private-repo policy in
+#13 all depend on it, and `check-actor.sh` refuses both exceptions in any
+other mode. `answer` cannot be collapsed either, though it nearly was: it is
+the old scratch mode, and dropping it would have silently taken the shell
+away from a consumer running `mode: read` + `shell: true` — caught by the
+everx-crm session reading the migration note, 2026-09-15, after this repo had
+already told them "behaviour is the same". A removed input is loud; a removed
+*combination* of inputs is silent.
 
 One thing fx does here that looks like a bug and is not: rule keys are not
 validated. `{"edti":{"*":"deny"}}` is accepted, stored and echoed back with no
-warning, so a renamed key would turn read mode into agent mode with nothing
+warning, so a renamed key would give a read-mode run a shell with nothing
 failing. That is why the Configure step reads the mode, model, step limit and
 rules back and fails the run when they are not what it wrote. A settings file
 fx cannot parse is dropped whole and silently too, and the same read-back
@@ -93,8 +108,14 @@ The shell is what makes the agent worth having: `git log` and `git blame`,
 the tests, a repro, a fix tried before it is proposed. Nothing it does to the
 checkout is kept unless it ships it, so the checkout is scratch paper until
 the moment it is not, and the base block says both halves. Because the agent
-writes to the runner's disk on every run, the action-files fingerprint runs
-on every agent-mode run.
+writes to the runner's disk in `agent` and `answer`, the action-files
+fingerprint and the integrity check run in both, and only `read` skips them.
+
+In `read` the base block also warns that the instructions below may name
+commands it cannot run. The built-in note tells the model to grep, to
+`git log -S` and to `git show` a commit before making an exclusivity claim;
+without that warning it keeps the shape of a checked note and checks nothing
+(#16).
 
 **Rules go in the global settings file, not a workspace profile.** The checkout
 path changes between runs, so a workspace-scoped rule silently would not apply.

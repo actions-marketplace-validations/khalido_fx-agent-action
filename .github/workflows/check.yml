@@ -61,7 +61,7 @@ jobs:
       # block must carry the ship-or-note judgement and name the skill. This
       # is the path v1.0.0 shipped broken for three days, because nothing
       # exercised it.
-      - name: build-prompt in agent mode from a comment
+      - name: build-prompt, all three modes, from a comment
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -69,15 +69,36 @@ jobs:
           export RUNNER_TEMP GITHUB_OUTPUT="$RUNNER_TEMP/out"
           export GITHUB_EVENT_NAME=issue_comment GITHUB_EVENT_PATH="$RUNNER_TEMP/event.json"
           echo '{"action":"created","comment":{"id":1,"body":"hey /fx, fix the flaky test"}}' > "$GITHUB_EVENT_PATH"
-          bash scripts/build-prompt.sh
+          prompt="$RUNNER_TEMP/fx-prompt.md"
+          absent() {  # absent <text> <file> — fails the step if it IS there
+            if grep -q "$1" "$2"; then echo "::error::'$1' should not be in $MODE mode"; exit 1; fi
+          }
+
+          # agent: the default, told to ship, and the comment is the instruction.
+          MODE='agent' bash scripts/build-prompt.sh
           grep -qx 'mode=agent' "$GITHUB_OUTPUT"
-          grep -q 'ship it with the open-pr skill' "$RUNNER_TEMP/fx-prompt.md"
+          grep -q 'ship it with the open-pr skill' "$prompt"
           grep -qx 'fix the flaky test' "$RUNNER_TEMP/fx-instruction.md"
-          # And read mode: no skill, no shell.
-          INPUT_MODE='read' bash scripts/build-prompt.sh
+
+          # answer: the same shell, and it must NOT be told to ship.
+          MODE='answer' INPUT_MODE='answer' bash scripts/build-prompt.sh
+          grep -qx 'mode=answer' "$GITHUB_OUTPUT"
+          grep -q 'run commands and edit files' "$prompt"
+          grep -q 'This run ships nothing' "$prompt"
+          MODE='answer' absent 'open-pr skill' "$prompt"
+
+          # read: no shell, no skill, and honest about the grep the note below
+          # is about to tell it to run.
+          MODE='read' INPUT_MODE='read' bash scripts/build-prompt.sh
           grep -qx 'mode=read' "$GITHUB_OUTPUT"
-          grep -q 'cannot open a pull request' "$RUNNER_TEMP/fx-prompt.md"
-          ! grep -q 'open-pr skill' "$RUNNER_TEMP/fx-prompt.md"
+          grep -q 'cannot open a pull request' "$prompt"
+          grep -q 'read the files instead' "$prompt"
+          MODE='read' absent 'open-pr skill' "$prompt"
+
+          # a mode that does not exist fails loudly rather than defaulting.
+          if INPUT_MODE='write' bash scripts/build-prompt.sh 2>/dev/null; then
+            echo '::error::mode=write was accepted; it should be refused'; exit 1
+          fi
 
       - name: skills have name and description
         run: |

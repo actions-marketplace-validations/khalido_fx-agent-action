@@ -28,16 +28,25 @@ break and how a release is cut.
 - **`compare-models` works without a shell**, fetching the catalog with the
   web tool, and the dogfood run no longer copies the repo's own `skills/`
   onto itself.
-- **A job with `contents: read` is the off switch for pull requests**: a
-  change the agent asked to ship is thrown away and the comment says so,
-  instead of a red step under an answer that says "shipped".
+- **Three modes, each one a step down**: `agent` ships, `answer` verifies and
+  never opens anything, `read` only reads. Two capabilities come apart, a
+  shell and a pull request, and three of the four combinations are worth
+  having.
+- **Two off switches for pull requests, at different levels.** `mode: answer`
+  means the agent is never told to ship, so it does not spend a run building
+  something that is thrown away. `contents: read` on the job means it cannot
+  push whatever it decides: the work is discarded and the comment says so,
+  instead of a red step under an answer that says "shipped". A repo that never
+  wants a PR should set both.
 
 ### Removed
 
 - Inputs `shell` and `pr_model`, and `mode` values `auto` and `write`. `mode`
-  is `agent` (default) or `read`; `read` denies the shell and edits and can
-  open nothing, and is the only mode that combines with
-  `allowed_non_write_users` or `allowed_bots` on issue and PR events.
+  is now `agent` (default), `answer` or `read`. **If you ran `mode: read` with
+  `shell: true`, use `mode: answer`**: that pair was the old scratch mode, and
+  `mode: read` alone now denies the shell, so a note would keep its shape and
+  quietly stop verifying anything. `read` stays the only mode that combines
+  with `allowed_non_write_users` or `allowed_bots` on issue and PR events.
 - `/fx pr` as the phrase that turned writing on. `/fx pr add X` still works;
   it now reads as "add X".
 
@@ -45,7 +54,10 @@ break and how a release is cut.
 
 - Every write-mode prompt build had failed since 2026-09-11 on a broken
   heredoc line, so `/fx pr` went red at "Build the prompt" with no comment
-  (#14). CI now builds the comment path in both modes.
+  (#14). CI now builds the comment path in all three modes.
+- A `read` run is now told that the instructions below it may name commands it
+  cannot run, so a note says a claim is unverified rather than keeping the
+  shape of one that checked (#16).
 - The secret scrub on pull request text no longer depends on the drafting
   call succeeding, and a scrub that fails stops the push (#15, first two
   gaps).
