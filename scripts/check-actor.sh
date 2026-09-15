@@ -77,25 +77,41 @@ fi
 # automation, so it counts as write.
 passed() { echo "write_access=$1" >> "${GITHUB_OUTPUT:-/dev/null}"; exit 0; }
 
+# Is this an event where a person's own text becomes the instruction? On those,
+# who wrote it matters. On a schedule or a manual run the prompt is the
+# workflow's, so nothing the actor typed is in it.
+authored=''
 case "$event" in
-  issues|issue_comment|pull_request|pull_request_target|pull_request_review|pull_request_review_comment) ;;
-  *)
-    echo "Actor $actor passed on a $event event, which has no write check." >&2
-    passed true
-    ;;
+  issues|issue_comment|pull_request|pull_request_target|pull_request_review|pull_request_review_comment)
+    authored=1 ;;
 esac
 
 # An allowed bot is an App installation, not a collaborator, so the permission
-# endpoint has nothing to say about it. But on these events the bot's own text
-# is the instruction, so it gets the same limit as an allowed stranger: read
-# mode, which has no shell and opens nothing. (On a schedule nothing the bot
-# wrote is in the prompt, which is why that case exited above.)
+# endpoint has nothing to say about it. Two separate limits:
+#
+#   mode      only where the bot's own text is the instruction. A schedule's
+#             prompt comes from the workflow, so the mode is the repo's choice
+#             there, not the bot's.
+#   memory    on EVERY event. A bot is not someone who could already push, and
+#             memory is the one thing a run leaves behind for every run after
+#             it — the same reason a stranger allowed through
+#             `allowed_non_write_users` cannot shape what future runs read.
+#
+# The memory half used to hang off the event switch below, which waves through
+# everything that is not an issue or PR event, so a listed bot on a `schedule`
+# saved memory. Caught 2026-09-15 by a run of this action on #5.
 if [ -n "$is_bot" ]; then
-  if [ "$mode" != "read" ]; then
+  if [ -n "$authored" ] && [ "$mode" != "read" ]; then
     echo "::error::Bot $actor is allowed by allowed_bots, but mode is '$mode'. On an issue or PR event a bot only combines with mode: read." >&2
     exit 1
   fi
+  echo "Bot $actor runs without write access." >&2
   passed false
+fi
+
+if [ -z "$authored" ]; then
+  echo "Actor $actor passed on a $event event, which has no write check." >&2
+  passed true
 fi
 
 # admin/write/read/none; maintain reads as write and triage as read. A 404 is

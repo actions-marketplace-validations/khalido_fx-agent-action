@@ -28,6 +28,11 @@ break and how a release is cut.
 - **`compare-models` works without a shell**, fetching the catalog with the
   web tool, and the dogfood run no longer copies the repo's own `skills/`
   onto itself.
+- **On `schedule` and `workflow_dispatch`, a job with no `mode` now runs as
+  the agent, with a shell.** Before, an unset `mode` was `auto`, and `auto`
+  with no `pr` verb to switch on resolved to read, so those jobs were
+  read-only by accident of the verb. Set `mode: read` or `mode: answer`
+  explicitly if that is what you wanted.
 - **Three modes, each one a step down**: `agent` ships, `answer` verifies and
   never opens anything, `read` only reads. Two capabilities come apart, a
   shell and a pull request, and three of the four combinations are worth
@@ -58,6 +63,12 @@ break and how a release is cut.
 
 ### Fixed
 
+- **A bot listed in `allowed_bots` no longer counts as write access on a
+  `schedule` or `workflow_dispatch` run**, so it cannot write the memory
+  branch that every later run reads. The memory half of that check hung off an
+  event switch that waves through everything which is not an issue or PR
+  event. A bot is still limited to `mode: read` only where its own text is the
+  instruction, since a scheduled prompt comes from the workflow.
 - Every write-mode prompt build had failed since 2026-09-11 on a broken
   heredoc line, so `/fx pr` went red at "Build the prompt" with no comment
   (#14). CI now builds the comment path in all three modes.

@@ -117,6 +117,19 @@ commands it cannot run. The built-in note tells the model to grep, to
 without that warning it keeps the shape of a checked note and checks nothing
 (#16).
 
+**A bot is never write access, on any event; a bot is limited to read mode
+only where its own text is the instruction.** Those are two different limits
+and they were tangled: the memory half hung off the event switch, which waves
+through everything that is not an issue or PR event, so a listed bot on a
+`schedule` saved memory that every later run reads. Found on 2026-09-15 by a
+run of this action on #5, an hour after the one-agent merge, and the first
+attempt at the fix put `passed false` above the mode check and let a bot skip
+the read-mode limit on an issue comment — a worse hole than the one being
+fixed, caught by running the cases by hand. They are now a test in
+`check.yml`, twelve rows, which is the answer to #6 for this script: a file
+where two conditions interleave is a file that wants a table of expected
+outcomes, not a careful reading.
+
 **A removed input stays declared, so passing it fails loudly.** GitHub warns
 on an input an action does not declare and then runs anyway, so removing
 `shell` outright would have left every `mode: read` + `shell: true` job green

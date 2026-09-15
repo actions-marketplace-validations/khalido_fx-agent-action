@@ -120,6 +120,59 @@ jobs:
           done
           grep -q 'name: Check the inputs' action.yml || { echo '::error::the Check the inputs step is gone'; exit 1; }
 
+      # Who may trigger a run, and who counts as write access for the memory
+      # save. Every outcome of check-actor.sh, against a stub `gh`. This exists
+      # because a hand edit to that file on 2026-09-15 fixed one hole and opened
+      # a worse one (a bot on an issue comment skipping the read-mode limit),
+      # caught by running these cases by hand. #6.
+      - name: actor checks
+        run: |
+          d="$(mktemp -d)"; mkdir -p "$d/bin"
+          # No heredoc: its body would carry this block's indentation, and
+          # dedenting it needs a sed -i that is not portable. The single quotes
+          # are the point — $2 belongs to the stub, not to this script.
+          # shellcheck disable=SC2016
+          { echo '#!/bin/sh'
+            echo 'case "$2" in'
+            echo '  users/*) echo User; exit 0 ;;'
+            echo '  repos/*/collaborators/writer/permission) echo write; exit 0 ;;'
+            echo '  repos/*/collaborators/*/permission) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;'
+            echo 'esac'
+            echo 'exit 1'
+          } > "$d/bin/gh"
+          chmod +x "$d/bin/gh"
+          fail=0
+          check() {  # check <want-exit> <want-write_access> <label> then env
+            local want_rc="$1" want_wa="$2" label="$3"; shift 3
+            : > "$d/out"
+            if env "$@" GITHUB_REPOSITORY=o/r GITHUB_OUTPUT="$d/out" PATH="$d/bin:$PATH" \
+                 bash scripts/check-actor.sh >/dev/null 2>&1; then rc=0; else rc=1; fi
+            wa="$(sed -n 's/^write_access=//p' "$d/out")"
+            if [ "$rc" != "$want_rc" ] || [ "$wa" != "$want_wa" ]; then
+              echo "::error::$label: got exit $rc write_access='$wa', wanted exit $want_rc write_access='$want_wa'"
+              fail=1
+            fi
+          }
+          B='ACTOR=dependabot[bot]' ; H='ACTOR=writer' ; S='ACTOR=octocat'
+          # A listed bot: read mode only where its own text is the instruction,
+          # and never write access, on any event.
+          check 0 false 'bot on a schedule'        "$B" EVENT_NAME=schedule ALLOWED_BOTS=dependabot MODE=agent
+          check 0 false 'bot on a dispatch'        "$B" EVENT_NAME=workflow_dispatch ALLOWED_BOTS=dependabot MODE=agent
+          check 1 ''    'bot on a comment, agent'  "$B" EVENT_NAME=issue_comment SENDER_TYPE=Bot ALLOWED_BOTS=dependabot MODE=agent
+          check 1 ''    'bot on a comment, answer' "$B" EVENT_NAME=issue_comment SENDER_TYPE=Bot ALLOWED_BOTS=dependabot MODE=answer
+          check 0 false 'bot on a comment, read'   "$B" EVENT_NAME=issue_comment SENDER_TYPE=Bot ALLOWED_BOTS=dependabot MODE=read
+          check 1 ''    'bot not listed'           "$B" EVENT_NAME=issue_comment SENDER_TYPE=Bot MODE=read
+          # A collaborator with write: everything, and memory saves.
+          check 0 true  'writer on a comment'      "$H" EVENT_NAME=issue_comment SENDER_TYPE=User MODE=agent
+          check 0 true  'writer on a schedule'     "$H" EVENT_NAME=schedule SENDER_TYPE=User MODE=agent
+          # Anyone else: refused, unless listed, and then read mode only.
+          check 1 ''    'stranger'                 "$S" EVENT_NAME=issue_comment SENDER_TYPE=User MODE=agent
+          check 1 ''    'stranger listed, agent'   "$S" EVENT_NAME=issue_comment SENDER_TYPE=User ALLOWED_NON_WRITE_USERS=octocat MODE=agent
+          check 1 ''    'stranger listed, answer'  "$S" EVENT_NAME=issue_comment SENDER_TYPE=User ALLOWED_NON_WRITE_USERS=octocat MODE=answer
+          check 0 false 'stranger listed, read'    "$S" EVENT_NAME=issue_comment SENDER_TYPE=User ALLOWED_NON_WRITE_USERS=octocat MODE=read
+          [ "$fail" = 0 ] || exit 1
+          echo 'actor checks ok'
+
       - name: skills have name and description
         run: |
           for f in skills/*/SKILL.md; do
