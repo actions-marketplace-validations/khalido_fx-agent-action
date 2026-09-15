@@ -300,8 +300,10 @@ Things that fail on the first day:
   GitHub token, the checkout has no credentials, the push goes to a branch,
   and a run that finds fx has edited the action's own scripts stops before
   the step that pushes or posts. A private repo on the free plan cannot have
-  branch protection, so there you are trusting those guards and everyone
-  with write access. If that is not true of your repo, `contents: read`; the
+  branch protection — GitHub answers 403 to both the branch-protection and
+  the ruleset APIs on that plan — so there you are trusting those guards and
+  everyone with write access. The push does at least refuse to target your
+  default branch, which is asserted rather than assumed. If that is not true of your repo, `contents: read`; the
   agent can then push nothing however it is asked.
 - **Read mode can reach the web.** Search and fetch are on, so an injected
   thread that steers the agent could read a file and send it out in a URL.

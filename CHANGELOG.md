@@ -63,6 +63,12 @@ break and how a release is cut.
 
 ### Fixed
 
+- **The push refuses to target the default branch.** It never did — the branch
+  name is built here — but that was an emergent property rather than an
+  asserted one, and a private repo on the free plan cannot have branch
+  protection to fall back on: GitHub answers 403 to both the
+  branch-protection and the ruleset APIs. Three of this action's four
+  consumers are in that position and one deploys its default branch on push.
 - **A bot listed in `allowed_bots` no longer counts as write access on a
   `schedule` or `workflow_dispatch` run**, so it cannot write the memory
   branch that every later run reads. The memory half of that check hung off an

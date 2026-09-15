@@ -314,6 +314,16 @@ with no comment is the worst outcome for someone who typed a command and
 walked away, while a cancelled run, superseded by a newer comment, should post
 nothing.
 
+**The push asserts its own target.** The branch name is built in
+`open-pr.sh`, so the push was never going to reach the default branch — but
+that was emergent, and the population this action is riskiest for cannot fall
+back on branch protection: a private repo on the free plan gets a 403 from
+both the branch-protection and the ruleset APIs, and three of the four
+consumers are exactly that, one of them deploying its default branch to
+production on push. So the target is compared to the repo's default branch
+before the push and a match fails the run. The default branch comes from the
+event payload, with a `gh api` fallback, so it usually costs nothing.
+
 **Pull requests are drafts, only carry what fx touched, and open only when
 the agent asked.** The ask is a file, `.agent-pr.md` at the repo root, title
 on the first line and the body after; the `open-pr` skill tells the agent to
