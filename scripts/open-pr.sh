@@ -130,7 +130,7 @@ host="${GITHUB_SERVER_URL:-https://github.com}"; host="${host#https://}"
 # branch — and this asserts it rather than trusting it. Branch protection is
 # the real guard and a private repo on the free plan cannot have one: GitHub
 # answers 403 "Upgrade to GitHub Pro" to both the branch-protection and the
-# ruleset APIs. Three of this action's four consumers are in that position and
+# ruleset APIs. Several of this action's consumers are in that position and
 # one of them deploys the default branch to production on push, so the cost of
 # this being wrong once is someone's live site. Asked for by the
 # syntechfibres.dev session, 2026-09-15.

@@ -15,7 +15,10 @@
 #      fail. Never fails the run: nothing to say prints nothing.
 set -euo pipefail
 
-usage=$(fx usage --json 2>/dev/null || true)
+# `env -u GH_TOKEN`: memory.sh calls this from the Save memory step, which
+# holds a token, and no fx process gets one. A ledger read runs no tools, so
+# this is the rule kept absolute rather than a hole closed.
+usage=$(env -u GH_TOKEN fx usage --json 2>/dev/null || true)
 [ -n "$usage" ] || exit 0
 
 spend=$(printf '%s' "$usage" | jq -r '.totals.spend // 0' 2>/dev/null || echo 0)

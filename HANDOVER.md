@@ -28,8 +28,10 @@ Read it, do the work, and **before you finish, leave it true**:
 ## In flight: the v1.1.0 release
 
 `CHANGELOG.md` has an uncommitted `## [1.1.0] - 2026-09-16` section, rolled
-from `Unreleased`. Nothing is tagged, nothing is published, `v1` still points
-at `da5f9a0`. `main` is pushed and CI is green.
+from `Unreleased`, and the working tree carries the small code and doc fixes
+that section needed to be true (`action.yml`, `scripts/build-prompt.sh`,
+`scripts/cost.sh`, `README.md`, `AGENTS.md`). Nothing is committed, tagged or
+published; `v1` still points at `da5f9a0`.
 
 The procedure is `.claude/skills/release/SKILL.md`. Follow it, including its
 rule that the changelog section **is** the release notes, and its requirement
@@ -46,79 +48,38 @@ repo advertises is `@main`, and no consumer is pinned to `@v1`. Do not propose
 
 ### What is left
 
-A verification pass on 2026-09-15 checked the 1.1.0 notes against the code and
-found the following. **Confirm each against the code before acting** — this
-list is a report, not a fact, and it may already be stale.
-
-False in the notes as written:
-
-1. The section claims "no `@v1` anywhere". It is advertised in at least three
-   places: `CHANGELOG.md:5`, the 1.0.0 "Pinning" paragraph, and
-   `docs/guide.md:320`. The seven `@main` pins are right. This sentence is the
-   whole justification for the version number, so it has to be exact — and the
-   docs calling `@v1` a compatibility promise now say something this release
-   makes untrue.
-2. It claims `/fx pr add X` "now reads as `add X`". The verb stripping is
-   gone, so the instruction is literally `pr add X`
-   (`scripts/build-prompt.sh`, around the trigger parse and where the
-   instruction is written).
-3. The `mode: answer` rationale is inverted. The notes say the agent is never
-   told to ship "so it does not spend a run building something that is thrown
-   away". The prompt tells an answer-mode run to make the change to find out
-   whether it works.
-4. "Every run has a shell and edits" is stated unconditionally in the lead and
-   the first Changed bullet, then contradicted three bullets later. `read`
-   denies both.
-5. The default-mode change is filed under `schedule` and `workflow_dispatch`.
-   It applies to **every event**. In 1.0.0 an unset `mode` was `auto`, which
-   resolved to read unless the `pr` verb appeared, so plain `/fx` questions and
-   issue notes were read-only too. Now an unset `mode` gets a full shell, which
-   can read `AI_GATEWAY_API_KEY` out of the environment. This is the most
-   consequential change in the release and currently reads as a footnote.
-   Decide where it belongs and how loudly.
-6. The `workflow_dispatch` bullet calls it "how a change to the action is tried
-   before it lands". True only of `.github/workflows/fx.yml`, which is
-   `uses: ./`. `examples/fx.yml` pins `@main`, so a dispatch there runs the
-   branch's checkout against main's action.
-
-Code, all small:
-
-7. `action.yml` says "Removed in 2.0.0" in the removed-input descriptions and
-   in the guard's error messages, and the changelog says the removals go for
-   good in 3.0.0. Neither matches a 1.1.0 release. Make code and notes agree.
-8. "fx never holds a GitHub token" has one exception: `scripts/memory.sh` calls
-   `scripts/cost.sh`, which runs `fx usage --json`, inside the Save memory
-   step, which holds `GH_TOKEN`. A ledger read, no model call, no tools, so the
-   risk is low — but either strip the token there or stop making the claim
-   absolute. `AGENTS.md` currently asserts only two fx calls sit in
-   token-holding steps and that both are stripped.
-9. The `.agent-pr.md` contract is only reachable through the `open-pr` skill.
-   `build-prompt.sh` names that skill in every agent-mode prompt, but the skill
-   only reaches the runner when `skills: true`. A job with `skills: false` is
-   told to use a skill that is not there, nothing else states the contract, and
-   it can never open a pull request or find out why.
+1. KO reads the 1.1.0 section and the diff and says yes. A verification pass
+   on 2026-09-16 checked every claim in the section against the code after
+   the fixes; if you are a later session, re-run that rather than trusting
+   it, since the section is what people read.
+2. Commit, tag, publish, per the skill's step 6. Then delete the stale
+   **draft** release also tagged `v1.0.0`, which duplicates the published one.
+3. Tell the consumers. `khalido/rd` still passes `shell: true` and has no
+   live session, so its next run fails on the first step with the migration
+   in the error; it needs a person to change it to `mode: answer` or drop the
+   line. The other three migrated on 2026-09-15.
 
 ### Rules for this release
 
-- Do not tag, publish, or create a release. Do not move `v1`, `v1.0` or `v1.1`
-  by hand — `.github/workflows/release-tag.yml` does it on `release:
-  published`, and by hand is explicitly forbidden.
+- Do not tag, publish, or create a release without a yes. Do not move `v1`,
+  `v1.0` or `v1.1` by hand — `.github/workflows/release-tag.yml` does it on
+  `release: published`, and by hand is explicitly forbidden.
 - Do not edit the published `## [1.0.0]` section. It is history.
-- Do not expand scope. Fix what is listed and what you find false in the 1.1.0
-  notes. Report anything else, do not fix it.
+- Do not expand scope. Report anything else, do not fix it.
 - Live fx runs cost one to four cents and the repo dogfoods itself. Do not
   spend without asking. Local checks are free; `AGENTS.md` has the recipes.
-- There is a stale **draft** release also tagged `v1.0.0`, duplicating the
-  published one. Harmless; delete it when publishing.
 
-### Consumers, as of 2026-09-15
+### Consumers, as of 2026-09-16
 
-Four repos ride `@main` and take every push on their next run. Three migrated
-to the new inputs the day it merged: `everxptyltd/everx-crm` (`mode: answer`),
-`syntechfibres/syntechfibres.dev`, `khalido/koevguide`. **`khalido/rd` has not
-migrated and has no live session** — it still passes `shell: true`, so its next
-run fails on the first step with the migration in the error. It needs a person.
-`uts-qmn/uts-tmos-robot` was being wired and was told to re-copy the example.
+Five repos track a workflow on `@main` and take every push on their next run
+(checked in the `~/code` checkouts, all level with origin):
+`everxptyltd/everx-crm` (`mode: answer`), `syntechfibres/syntechfibres.dev`,
+`khalido/koevguide`, `uts-qmn/uts-tmos-robot`, and `khalido/rd`. **Only
+`khalido/rd` still passes `shell: true`** (twice, one of them with
+`mode: read`, which is now `mode: answer`); it has no live session.
+`khalido/kotools` has an untracked copy of the workflow and is not a consumer
+until it is committed. `scripts/open-pr.sh` has a comment that still counts
+four consumers; it is a comment, left alone.
 
 ## Not in flight, but parked and worth knowing
 

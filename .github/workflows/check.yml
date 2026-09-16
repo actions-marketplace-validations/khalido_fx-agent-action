@@ -90,6 +90,12 @@ jobs:
           grep -q 'ship it with the open-pr skill' "$prompt"
           grep -qx 'fix the flaky test' "$RUNNER_TEMP/fx-instruction.md"
 
+          # agent with skills off: the open-pr skill is not on the runner, so
+          # the prompt must carry the .agent-pr.md contract itself.
+          MODE='agent' INPUT_SKILLS='false' bash scripts/build-prompt.sh
+          grep -q 'agent-pr.md. at the repository root' "$prompt"
+          MODE='agent' absent 'open-pr skill' "$prompt"
+
           # answer: the same shell, and it must NOT be told to ship.
           MODE='answer' INPUT_MODE='answer' bash scripts/build-prompt.sh
           grep -qx 'mode=answer' "$GITHUB_OUTPUT"
@@ -125,11 +131,11 @@ jobs:
 
       # The removed inputs are declared on purpose, so a workflow that passes
       # one gets an error instead of GitHub's ignorable warning. Deleting them
-      # is a 3.0.0 job; until then this fails if they go early.
+      # is a 2.0.0 job; until then this fails if they go early.
       - name: removed inputs are still refused, not ignored
         run: |
           for i in shell pr_model; do
-            grep -qE "^  $i:" action.yml || { echo "::error::action.yml no longer declares '$i'; a workflow passing it gets a warning and a green run. Keep it until 3.0.0."; exit 1; }
+            grep -qE "^  $i:" action.yml || { echo "::error::action.yml no longer declares '$i'; a workflow passing it gets a warning and a green run. Keep it until 2.0.0."; exit 1; }
           done
           grep -q 'name: Check the inputs' action.yml || { echo '::error::the Check the inputs step is gone'; exit 1; }
 

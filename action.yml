@@ -54,18 +54,20 @@ inputs:
     required: false
     default: agent
 
-  # Removed in 2.0.0, still DECLARED so a workflow that passes one gets a red
+  # Removed in 1.1.0, still DECLARED so a workflow that passes one gets a red
   # run with a migration message rather than GitHub's "unexpected input"
   # warning, which is a line in a log nobody reads on a green run. A removed
   # input is loud; a removed COMBINATION of inputs was silent, which is how
   # `mode: read` + `shell: true` nearly lost its shell without telling anyone.
-  # Delete these two in 3.0.0, by which time the error has been there a major.
+  # Delete these two in 2.0.0, by which time the error has been there for
+  # the rest of 1.x. (The removal shipped in a MINOR by decision; CHANGELOG.md
+  # says why.)
   shell:
-    description: 'Removed in 2.0.0. `shell: true` with `mode: read` is now `mode: answer`; otherwise drop it, the default mode has a shell.'
+    description: 'Removed in 1.1.0. `shell: true` with `mode: read` is now `mode: answer`; otherwise drop it, the default mode has a shell.'
     required: false
     default: ''
   pr_model:
-    description: 'Removed in 2.0.0. One model per run now, because a run no longer knows in advance whether it will open a pull request. Use `model`.'
+    description: 'Removed in 1.1.0. One model per run now, because a run no longer knows in advance whether it will open a pull request. Use `model`.'
     required: false
     default: ''
 
@@ -249,26 +251,26 @@ runs:
         case "$SHELL_INPUT" in
           '') ;;
           false|False|FALSE|no|'0')
-            echo "::error::The \`shell\` input was removed in 2.0.0, and dropping the line is NOT your migration: you asked for no shell, and the default \`agent\` mode has one. Use \`mode: read\` to keep a run with no shell and no pull request, or \`mode: answer\` if you want the shell after all but never a pull request. See CHANGELOG.md." >&2
+            echo "::error::The \`shell\` input was removed in 1.1.0, and dropping the line is NOT your migration: you asked for no shell, and the default \`agent\` mode has one. Use \`mode: read\` to keep a run with no shell and no pull request, or \`mode: answer\` if you want the shell after all but never a pull request. See CHANGELOG.md." >&2
             bad=1
             ;;
           *)
-            echo "::error::The \`shell\` input was removed in 2.0.0. If you had \`shell: true\` with \`mode: read\`, that pair is now \`mode: answer\` — the same shell, and it still opens nothing. With any other mode, drop the line: the default \`agent\` mode has the shell. See CHANGELOG.md." >&2
+            echo "::error::The \`shell\` input was removed in 1.1.0. If you had \`shell: true\` with \`mode: read\`, that pair is now \`mode: answer\` — the same shell, and it still opens nothing. With any other mode, drop the line: the default \`agent\` mode has the shell. See CHANGELOG.md." >&2
             bad=1
             ;;
         esac
         if [ -n "$PR_MODEL" ]; then
-          echo "::error::The \`pr_model\` input was removed in 2.0.0. There is one model per run now, because a run no longer knows in advance whether it will open a pull request. Set \`model\` instead. See CHANGELOG.md." >&2
+          echo "::error::The \`pr_model\` input was removed in 1.1.0. There is one model per run now, because a run no longer knows in advance whether it will open a pull request. Set \`model\` instead. See CHANGELOG.md." >&2
           bad=1
         fi
         case "${MODE:-agent}" in
           agent|answer|read) ;;
           write)
-            echo "::error::\`mode: write\` was removed in 2.0.0. The default \`agent\` mode is what it did: a shell, edits, and a draft pull request — decided by the agent now rather than forced by the job. Drop the line. See CHANGELOG.md." >&2
+            echo "::error::\`mode: write\` was removed in 1.1.0. The default \`agent\` mode is what it did: a shell, edits, and a draft pull request — decided by the agent now rather than forced by the job. Drop the line. See CHANGELOG.md." >&2
             bad=1
             ;;
           auto)
-            echo "::error::\`mode: auto\` was removed in 2.0.0. It meant \"let the \`pr\` verb decide\", and there is no verb left to decide with. Drop the line for the default \`agent\` mode, or set \`answer\` (shell, never opens anything) or \`read\` (neither). See CHANGELOG.md." >&2
+            echo "::error::\`mode: auto\` was removed in 1.1.0. It meant \"let the \`pr\` verb decide\", and there is no verb left to decide with. Drop the line for the default \`agent\` mode, or set \`answer\` (shell, never opens anything) or \`read\` (neither). See CHANGELOG.md." >&2
             bad=1
             ;;
           *)
@@ -388,6 +390,7 @@ runs:
         INCLUDE_DIFF: ${{ inputs.include_diff }}
         INPUT_TRIGGER: ${{ inputs.trigger }}
         INPUT_MODE: ${{ inputs.mode }}
+        INPUT_SKILLS: ${{ inputs.skills }}
         MAX_STEPS: ${{ inputs.max_steps }}
         MEMORY_PATH: ${{ steps.memory.outputs.memory_path }}
         MEMORY_LINES: ${{ inputs.memory_lines }}

@@ -157,9 +157,10 @@ and quietly shell-less. `shell` and `pr_model` are therefore still in
 which runs before anything is installed or any API is called. The messages
 are per value, not per input: `shell: false` migrates to `mode: read`, and
 telling that user to "drop the line" would hand them the shell they
-explicitly refused. Delete both in 3.0.0. This is the repo's own release rule
-("deprecate in a MINOR, remove in the next MAJOR") applied to a MAJOR that
-had nowhere earlier to deprecate in. Asked for by the everx-crm session as
+explicitly refused. Delete both in 2.0.0. This is the repo's own release rule
+("deprecate in a MINOR, remove in the next MAJOR") applied to a break that
+had nowhere earlier to deprecate in, and that shipped as 1.1.0 by decision
+(the 1.1.0 changelog section says why). Asked for by the everx-crm session as
 the consumer who rides `@main`: one red run beats silent drift.
 
 **Rules go in the global settings file, not a workspace profile.** The checkout
@@ -357,16 +358,18 @@ the button.
 **No fx process holds a GitHub token, and the action checks its own files
 after the run.** The `Run fx` step has no `GH_TOKEN`, the examples check out
 with `persist-credentials: false`, and only `open-pr.sh` pushes, to a branch,
-with the token in the URL. One later fx call sits inside a step that holds
-one — the compaction `fx ask` in `memory.sh` — so it runs under
+with the token in the URL. Two later fx calls sit inside the `Save memory`
+step, which holds one — the compaction `fx ask` in `memory.sh` and the
+`fx usage` ledger read in `cost.sh` that follows it — so both run under
 `env -u GH_TOKEN`; the environment a child process inherits is the whole
-reason the main run never got a token either. That leaves one route to the
-default branch: fx, with a shell, editing `open-pr.sh` under `_actions/`
-before it runs. So before every agent-mode run, `Fingerprint the action`
-hashes the action's `action.yml` and `scripts/` per file into a step output,
-which lives in the runner's memory, and an inline step after fx recomputes it
-and fails the run on a mismatch, naming the file; the PR, memory and comment
-steps are gated on it. Inline because a script would be read from the
+reason the main run never got a token either. The Configure step's
+`fx permissions`, `fx status` and `fx doctor` hold no token to strip. That
+leaves one route to the default branch: fx, with a shell, editing
+`open-pr.sh` under `_actions/` before it runs. So before every agent-mode
+run, `Fingerprint the action` hashes the action's `action.yml` and `scripts/`
+per file into a step output, which lives in the runner's memory, and an
+inline step after fx recomputes it and fails the run on a mismatch, naming
+the file; the PR, memory and comment steps are gated on it. Inline because a script would be read from the
 directory being checked. `__pycache__` is skipped because the first live run
 tripped on the agent running this repo's own `py_compile` check. With
 `uses: ./` the action path is the checkout, so a run here that edits
