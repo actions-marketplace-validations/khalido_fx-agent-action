@@ -3,6 +3,11 @@
 A GitHub Action that runs [fx](https://fx.sh) on an issue or PR and posts one
 comment. Read `README.md` for what it does; this file is how to work on it.
 
+**Read `HANDOVER.md` if it exists.** This file is how the action works and
+does not go stale; that one is what is half-finished right now and goes stale
+the moment somebody finishes it. It also carries its own rule: a session that
+starts from it deletes what it finished and leaves what the next one needs.
+
 **fx is new and changes weekly. When working on this action, read fx's docs,
 not your memory of them:** <https://fx.sh/llms.txt> is the index,
 <https://fx.sh/llms-full.txt> is every page in one file (about 200 KB;
