@@ -25,61 +25,15 @@ Read it, do the work, and **before you finish, leave it true**:
 
 ---
 
-## In flight: the v1.1.0 release
+## In flight
 
-`CHANGELOG.md` has an uncommitted `## [1.1.0] - 2026-09-16` section, rolled
-from `Unreleased`, and the working tree carries the small code and doc fixes
-that section needed to be true (`action.yml`, `scripts/build-prompt.sh`,
-`scripts/cost.sh`, `README.md`, `AGENTS.md`). Nothing is committed, tagged or
-published; `v1` still points at `da5f9a0`.
+Nothing. v1.1.0 is published (2026-09-16) and `v1` and `v1.1` point at it.
 
-The procedure is `.claude/skills/release/SKILL.md`. Follow it, including its
-rule that the changelog section **is** the release notes, and its requirement
-to present and stop rather than publish.
-
-### Decided — do not relitigate
-
-This release removes inputs (`shell`, `pr_model`) and `mode` values (`auto`,
-`write`). By the release skill's own table that is a MAJOR and would be
-`2.0.0`. **KO decided on 2026-09-16 to ship it as `1.1.0` and let the release
-workflow move `v1` onto it**, because the action is days old, every pin the
-repo advertises is `@main`, and no consumer is pinned to `@v1`. Do not propose
-`2.0.0` or `0.x`. Make what ships accurate; the number is settled.
-
-### What is left
-
-1. KO reads the 1.1.0 section and the diff and says yes. A verification pass
-   on 2026-09-16 checked every claim in the section against the code after
-   the fixes; if you are a later session, re-run that rather than trusting
-   it, since the section is what people read.
-2. Commit, tag, publish, per the skill's step 6. Then delete the stale
-   **draft** release also tagged `v1.0.0`, which duplicates the published one.
-3. Tell the consumers. `khalido/rd` still passes `shell: true` and has no
-   live session, so its next run fails on the first step with the migration
-   in the error; it needs a person to change it to `mode: answer` or drop the
-   line. The other three migrated on 2026-09-15.
-
-### Rules for this release
-
-- Do not tag, publish, or create a release without a yes. Do not move `v1`,
-  `v1.0` or `v1.1` by hand — `.github/workflows/release-tag.yml` does it on
-  `release: published`, and by hand is explicitly forbidden.
-- Do not edit the published `## [1.0.0]` section. It is history.
-- Do not expand scope. Report anything else, do not fix it.
-- Live fx runs cost one to four cents and the repo dogfoods itself. Do not
-  spend without asking. Local checks are free; `AGENTS.md` has the recipes.
-
-### Consumers, as of 2026-09-16
-
-Five repos track a workflow on `@main` and take every push on their next run
-(checked in the `~/code` checkouts, all level with origin):
-`everxptyltd/everx-crm` (`mode: answer`), `syntechfibres/syntechfibres.dev`,
-`khalido/koevguide`, `uts-qmn/uts-tmos-robot`, and `khalido/rd`. **Only
-`khalido/rd` still passes `shell: true`** (twice, one of them with
-`mode: read`, which is now `mode: answer`); it has no live session.
-`khalido/kotools` has an untracked copy of the workflow and is not a consumer
-until it is committed. `scripts/open-pr.sh` has a comment that still counts
-four consumers; it is a comment, left alone.
+One loose end that is not this repo's code: **`khalido/rd` still passes
+`shell: true`** (twice, one of them with `mode: read`, which is now
+`mode: answer`), so its next run fails on the first step with the migration
+in the error. It has no live session and needs a person. KO's repos stay on
+`@main` for now, on purpose. The other consumers migrated on 2026-09-15.
 
 ## Not in flight, but parked and worth knowing
 
