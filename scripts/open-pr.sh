@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
-# Turn whatever the agent changed in the workspace into a branch and a pull
-# request. Nothing here is fx's doing: fx edits files, this commits them.
+# Turn what the agent changed in the workspace into a branch and a draft pull
+# request, when the agent asked for one. fx edits files; this commits them.
 #
-# Runs only after a write-mode turn. If the agent changed nothing, that is a
-# normal outcome — it thought and answered rather than typed — so this exits
-# quietly and the comment step still posts the answer.
+# The agent asks by writing `.agent-pr.md` at the repository root: first line
+# the title, the rest the body. That file is the open-pr skill's whole
+# mechanism. No file, no pull request — the agent answered, or experimented
+# and decided not to ship, both normal outcomes. A file with an unchanged tree
+# opens nothing either, so prose alone can never open a pull request.
+#
+# fx never holds a GitHub token. This step does, for the push, and it reads a
+# file the agent wrote; the integrity check before this step is what makes
+# reading scripts from the action directory safe.
 set -euo pipefail
 
 # Pathspecs below are repo-root relative, and so is everything git prints, so
 # work from the root whatever `working_directory` was.
 cd "$(git rev-parse --show-toplevel)"
+
+signal=".agent-pr.md"
 
 # Only what THIS run touched. A previous step may have left build output in the
 # workspace, and staging everything would sweep that into the pull request.
@@ -35,42 +43,44 @@ after=$(GIT_INDEX_FILE="$RUNNER_TEMP/fx-index-after" git write-tree)
 # has already done.
 changed="$RUNNER_TEMP/fx-changed.z"
 git diff --name-only -z "$before" "$after" > "$changed"
-# The agent's memory file is saved to its own branch by memory.sh, never here.
-if grep -qzE '(^|/)\.agent-memory/' "$changed" 2>/dev/null; then
-  grep -zvE '(^|/)\.agent-memory/' "$changed" > "$changed.f" || true
+# The memory file goes to its own branch through memory.sh, the signal file
+# is the pull request's text, not part of it, and __pycache__ is what running
+# a Python repo's checks leaves behind: the first live PR carried a .pyc.
+skip="(^|/)\.agent-memory/|(^|/)__pycache__/|^$signal\$"
+if grep -qzE "$skip" "$changed" 2>/dev/null; then
+  grep -zvE "$skip" "$changed" > "$changed.f" || true
   mv "$changed.f" "$changed"
 fi
 
+if [ ! -f "$signal" ]; then
+  if [ -s "$changed" ]; then
+    echo "The agent changed $(tr -cd '\0' < "$changed" | wc -c | tr -d ' ') file(s) and did not ask for a pull request (no $signal); the checkout is thrown away." >&2
+  else
+    echo "The agent asked for no pull request and changed no files." >&2
+  fi
+  echo "pr_url=" >> "$GITHUB_OUTPUT"
+  exit 0
+fi
 if [ ! -s "$changed" ]; then
-  echo "The agent changed no files; nothing to open a pull request for." >&2
+  echo "::warning::The agent wrote $signal but changed no files; nothing to open a pull request for." >&2
   echo "pr_url=" >> "$GITHUB_OUTPUT"
   exit 0
 fi
 
-branch="${BRANCH_PREFIX:-fx}/${ISSUE_NUMBER:-run}-$(date +%s)"
-
-# `fx pr` drafts a title and body from the diff — but it reads the UNCOMMITTED
-# working tree (verified on 0.0.8: it runs `git diff` and changes nothing), so
-# it has to run here, before the commit below. It has no --json, so the prose is
-# parsed loosely and anything unexpected falls back to the agent's own answer.
-draft="$RUNNER_TEMP/fx-pr-draft.md"
-title=''
-# No GH_TOKEN for fx: this step has one for the push below, and fx's shell is a
-# child process that inherits the environment. The agent gets the diff, not the
-# credential.
-if env -u GH_TOKEN fx pr < /dev/null > "$draft" 2>/dev/null; then
-  # Scrub HERE, not before the body is written further down: the title parsed
-  # out of this file on the next line becomes the commit message and the pull
-  # request title, and both are pushed before the body is ever read.
-  python3 -c "import sys; sys.path.insert(0, sys.argv[2]); import redact;
+# Scrub before anything is read out of it: the title becomes the commit
+# message and is pushed before the body is used. Not `|| true`: a scrub that
+# fails must stop the push, not let an unscrubbed title through.
+python3 -c "import sys; sys.path.insert(0, sys.argv[2]); import redact;
 found = redact.redact_file(sys.argv[1]);
-[print(f'::warning::Removed {n} from the pull request draft before using it.') for n in found]" \
-    "$draft" "$(dirname "$0")" 2>/dev/null || true
-  title=$(grep -m1 -E '^[[:space:]]*(\*\*)?Title:' "$draft" \
-    | sed -E 's/^[[:space:]]*(\*\*)?Title:(\*\*)?[[:space:]]*//; s/[[:space:]]*$//')
-fi
+[print(f'::warning::Removed {n} from the pull request text before using it.') for n in found]" \
+  "$signal" "$(dirname "$0")"
+
+# First non-empty line is the title, minus any heading marks or bold the model
+# added; everything after it is the body.
+title=$(grep -m1 -v '^[[:space:]]*$' "$signal" | sed -E 's/^[[:space:]]*#+[[:space:]]*//; s/^\*\*(.*)\*\*$/\1/; s/[[:space:]]*$//')
+body_text=$(awk 'found { print; next } !/^[[:space:]]*$/ { found = 1 }' "$signal" | sed '/./,$!d')
 if [ -z "$title" ]; then
-  # The agent's first line, when it reads like a title rather than a paragraph.
+  # The agent's first answer line, when it reads like a title rather than a paragraph.
   first=$(head -n1 "${RESPONSE_PATH:-/dev/null}" 2>/dev/null | sed -E 's/^#+[[:space:]]*//; s/[[:space:]]*$//')
   if [ -n "$first" ] && [ "${#first}" -le 72 ]; then
     title="$first"
@@ -82,6 +92,8 @@ fi
 # A model-written title starting with "-" would be read as a flag by `gh`.
 title=$(printf '%s' "$title" | sed -E 's/^[-[:space:]]+//')
 [ -n "$title" ] || title="fx: changes for #${ISSUE_NUMBER:-}"
+
+branch="${BRANCH_PREFIX:-fx}/${ISSUE_NUMBER:-run}-$(date +%s)"
 
 # The commit identity is the bot's, always. An App token changes who COMMENTS;
 # GitHub attributes a commit by the email inside it.
@@ -113,19 +125,40 @@ git commit -q -m "$title" -m "Opened by fx from #${ISSUE_NUMBER:-} · run ${GITH
 # GITHUB_SERVER_URL rather than a hard-coded github.com, so this works on
 # GitHub Enterprise Server too.
 host="${GITHUB_SERVER_URL:-https://github.com}"; host="${host#https://}"
-git push -q "https://x-access-token:${GH_TOKEN}@${host}/${GITHUB_REPOSITORY}.git" "HEAD:$branch"
 
-# `fx pr` was a second billed model request, after run-fx.sh read the ledger.
-# Read it again here so the footer and max_cost see the true total; the
-# runner's HOME is fresh, so the ledger holds only this job's spend.
-# The ledger again, now with the fx pr request in it; estimated under BYOK.
-bash "$(dirname "$0")/cost.sh" >> "$GITHUB_OUTPUT" 2>/dev/null || true
+# The push target is a branch this script computed, so it is never the default
+# branch — and this asserts it rather than trusting it. Branch protection is
+# the real guard and a private repo on the free plan cannot have one: GitHub
+# answers 403 "Upgrade to GitHub Pro" to both the branch-protection and the
+# ruleset APIs. Several of this action's consumers are in that position and
+# one of them deploys the default branch to production on push, so the cost of
+# this being wrong once is someone's live site. Asked for by the
+# syntechfibres.dev session, 2026-09-15.
+default_branch="${DEFAULT_BRANCH:-}"
+[ -n "$default_branch" ] || default_branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch 2>/dev/null || true)
+if [ -n "$default_branch" ] && [ "$branch" = "$default_branch" ]; then
+  echo "::error::Refusing to push: the branch this run built ('$branch') is the repository's default branch. This action only ever pushes to a new branch; something upstream of here is wrong." >&2
+  exit 1
+fi
+
+# A job with `contents: read` cannot push, and that is the off switch for pull
+# requests: say so in the comment rather than fail a step the answer already
+# describes as shipped. Any other push failure is still an error.
+if ! push_err=$(git push -q "https://x-access-token:${GH_TOKEN}@${host}/${GITHUB_REPOSITORY}.git" "HEAD:$branch" 2>&1); then
+  if printf '%s' "$push_err" | grep -qiE '403|permission|not permitted|write access'; then
+    echo "::warning::The agent asked for a pull request but the job's token cannot push a branch (give the job contents: write). Its edits are thrown away." >&2
+    { echo "pr_url="; echo "pr_unpushed=true"; } >> "$GITHUB_OUTPUT"
+    exit 0
+  fi
+  echo "::error::git push failed: $(printf '%s' "$push_err" | sed "s#x-access-token:[^@]*@#x-access-token:***@#" | head -c 300)" >&2
+  exit 1
+fi
 
 body_file="$RUNNER_TEMP/fx-pr-body.md"
 {
-  # fx's drafted body when we got one, else what the agent told the commenter.
-  if [ -s "$draft" ] && [ -n "$(sed -n '/^[[:space:]]*\(\*\*\)\?Title:/,$p' "$draft" | tail -n +2)" ]; then
-    sed -n '/^[[:space:]]*\(\*\*\)\?Title:/,$p' "$draft" | tail -n +2
+  # The agent's body when it wrote one, else what it told the commenter.
+  if [ -n "$(printf '%s' "$body_text" | tr -d '[:space:]')" ]; then
+    printf '%s\n' "$body_text"
   elif [ -n "${RESPONSE_PATH:-}" ] && [ -s "${RESPONSE_PATH:-}" ]; then
     cat "$RESPONSE_PATH"
   else
@@ -142,7 +175,16 @@ body_file="$RUNNER_TEMP/fx-pr-body.md"
 # Draft, always. Nobody has read this yet, and a draft cannot be merged by
 # accident — the same reason anthropics/claude-code-action stops at a branch and
 # makes a person click "create pull request".
-url=$(gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" --draft \
+# Against the branch the workflow ran on, so a workflow_dispatch run from a
+# feature branch (how a change to this action is tried) targets that branch
+# and not the default one. On a pull_request event the ref is a merge ref, and
+# then gh's default, the repo's default branch, is the only sane base.
+base=''
+case "${GITHUB_REF_TYPE:-}:${GITHUB_REF_NAME:-}" in
+  branch:*/merge|branch:|:*) ;;
+  branch:*) base="$GITHUB_REF_NAME" ;;
+esac
+url=$(gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" --draft ${base:+--base "$base"} \
   --title "$title" --body-file "$body_file" | tail -1)
 
 echo "pr_url=$url" >> "$GITHUB_OUTPUT"

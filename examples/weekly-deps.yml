@@ -39,7 +39,6 @@ jobs:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
         with:
           model: anthropic/claude-sonnet-5
-          mode: write
           post: none          # no issue to comment on; it opens a PR
           max_steps: '80'
           prompt: |
@@ -55,8 +54,9 @@ jobs:
                there is a build, run it: a package can pass tests and still
                break the build.
             4. If a bump fails, revert that one package and keep the rest.
+            5. Ship what passed with the open-pr skill.
 
             Your note is what a person reads on Sunday morning instead of eight
             dependabot PRs. Lead with anything that needs a decision. Say which
             checks you ran and what they said. If nothing needed bumping, say
-            that in one line and leave the tree alone.
+            that in one line, leave the tree alone and open nothing.

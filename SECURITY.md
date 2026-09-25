@@ -1,7 +1,8 @@
 # Security
 
-This action reads untrusted text (issue bodies, comments, diffs) and, in write
-mode, runs an agent with a token that can push a branch. If you find a way to
+This action reads untrusted text (issue bodies, comments, diffs) and runs an
+agent with a shell, whose changes the workflow can push as a draft pull
+request with its own token; fx never holds that token. If you find a way to
 make it do something its README says it cannot, report it privately through
 [GitHub's advisory form](https://github.com/khalido/fx-agent-action/security/advisories/new)
 rather than an issue. Say which version, and include the comment or payload

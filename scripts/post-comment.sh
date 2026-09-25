@@ -6,7 +6,7 @@
 # rendered markdown, and unmistakable, so a re-run never edits a person's
 # comment. GitHub keeps the edit history, so nothing is lost by overwriting.
 #
-# Runs under always(). A failed run is exactly when someone wants to be told
+# Runs under !cancelled(). A failed run is exactly when someone wants to be told
 # why, and a red X with no comment is the worst outcome for a person who typed
 # a command and walked away.
 set -euo pipefail
@@ -101,6 +101,7 @@ footer=$(printf '%s' "$runs" | jq -r '
     printf 'The run failed before there was an answer. The [log](%s) says why.\n' "$run_url"
   fi
   [ -n "${PR_URL:-}" ] && printf '\n\nOpened %s — nobody has reviewed it yet.\n' "$PR_URL"
+  [ "${PR_UNPUSHED:-}" = "true" ] && printf '\n\n*The agent asked for a pull request, but this job cannot push a branch. Its edits were not kept; give the job `contents: write` if it should be able to.*\n'
   [ "${RUN_FAILED:-success}" = "failure" ] && printf '\n\n*The run itself failed; the answer above may be partial.*\n'
   printf '\n\n---\n%s\n' "$footer"
 } > "$body"

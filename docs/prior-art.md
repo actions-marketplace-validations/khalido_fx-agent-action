@@ -117,7 +117,7 @@ Six dimensions: trigger, actor checks, auth, output UX, safety, recipes.
 - The cleanest separation of concerns in the survey: it is a **runner, not a bot**. No trigger parsing, no comment posting, one `final-message` output. Everything GitHub-shaped is your workflow's job.
 - It still does the actor check inside the action, which is the right split: the thing that spends money enforces who may spend it, while the thing that formats comments stays in YAML.
 - `safety-strategy` is orthogonal to the sandbox and the docs insist on it: "Permission profiles constrain commands that Codex runs; they do not replace the action's `safety-strategy`." Default `drop-sudo` revokes sudo before invoking the agent.
-- `docs/security.md` has the sharpest single warning I found: a read-only sandbox **plus retained sudo** lets the agent read `OPENAI_API_KEY` out of procfs. fx's answer to the same class of problem is different and arguably weaker (deny the shell in read mode; redact on the way out in write mode), but the threat is identical and the fx README does not name procfs.
+- `docs/security.md` has the sharpest single warning I found: a read-only sandbox **plus retained sudo** lets the agent read `OPENAI_API_KEY` out of procfs. fx's answer to the same class of problem is different and arguably weaker (deny the shell in read mode; redact on the way out in agent mode), but the threat is identical and the fx README does not name procfs.
 - Also recommends running the agent step **last in the job**, because it can spawn lingering processes or tamper with git hooks that later steps would run.
 
 ### GitHub Copilot coding agent
@@ -156,7 +156,7 @@ One line each, grouped, with who documents it.
 - Triage and label a new issue. claude-code-action ("Issue Auto-Triage and Labeling", `examples/issue-triage.yml`), run-gemini-cli (`issue-triage` + `gemini-scheduled-triage`), opencode (triage with an account-age filter), Amazon Q. **fx has this** (`examples/triage.yml`).
 - Detect duplicate issues. claude-code-action (`examples/issue-deduplication.yml`).
 - Answer a question about the codebase on an issue thread. claude-code-action (`@claude What does this function do`), opencode (`/opencode explain this issue`), pi. **fx has this** (the `note` job in `examples/fx.yml`).
-- Implement from an issue and open a PR. opencode (`/opencode fix this`), Copilot (assign the issue), Amazon Q (`/q dev` or label), OpenHands (`fix-me` label), goose (`goose` label), Aider community action. **fx has this** (`examples/build-it.yml`, `/fx pr`).
+- Implement from an issue and open a PR. opencode (`/opencode fix this`), Copilot (assign the issue), Amazon Q (`/q dev` or label), OpenHands (`fix-me` label), goose (`goose` label), Aider community action. **fx has this**: the agent decides to ship from "fix this", through its `open-pr` skill (until 2026-09-14 it was the `/fx pr` verb).
 - Trigger on assignment to a bot user. Copilot (native), pi ("Assignment Triggers"), claude-code-action (`assignee_trigger`).
 - Trigger on a label. claude-code-action (`label_trigger`, default `claude`), OpenHands (`fix-me`), Amazon Q, goose, legacy Sweep.
 
@@ -219,7 +219,7 @@ Still missing, all pure workflow recipes rather than action changes: a **label t
 
 - **Repo-supplied agent instructions.** pi's README has a `[!CAUTION]` block saying project trust is always on in CI, so `AGENTS.md` and `.pi/` in the checkout steer the agent. fx presumably loads `AGENTS.md` from the workspace too. On a fork-PR checkout that is an injection channel with no sanitizer in front of it. `examples/pr-review.yml` already skips forks, which mostly covers it, but the README should say why in one line.
 - **PR head vs base for config.** claude-code-action restores `.claude/`, `CLAUDE.md` etc. from the base branch on PRs and documents the residual hole (lockfiles, `bunfig.toml`, hooks still come from the head). fx does not need the full mechanism, but "on a PR, the agent's instructions come from the PR's own checkout" is a sentence the README owes the reader.
-- **Secrets via procfs.** codex-action's `docs/security.md` warns that a read-only sandbox with sudo retained lets the agent read the API key from procfs. fx's read mode denies the shell entirely, which is a stronger answer, and `AGENTS.md` already documents that write mode's shell inherits the key. Worth a cross-reference; it makes fx's read-mode design look deliberate rather than lucky.
+- **Secrets via procfs.** codex-action's `docs/security.md` warns that a read-only sandbox with sudo retained lets the agent read the API key from procfs. fx's read mode denies the shell entirely, which is a stronger answer, and `AGENTS.md` already documents that the agent mode's shell inherits the key. Worth a cross-reference; it makes fx's read-mode design look deliberate rather than lucky.
 
 ### 6. Output UX gaps, in order of value
 

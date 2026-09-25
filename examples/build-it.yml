@@ -1,5 +1,6 @@
-# `/fx pr add a retry to the API client` — the agent makes the
-# change and opens a draft pull request you review like anyone else's.
+# `/fx add a retry to the API client` — the agent makes the change, runs the
+# checks, and opens a draft pull request you review like anyone else's. The
+# same job as examples/fx.yml minus the issue note, on a stronger model.
 #
 # This is the one that can write, so read the permissions block before you copy
 # it. `contents: write` lets the job push a BRANCH; it also lets it push to your
@@ -30,15 +31,12 @@ concurrency:
 
 jobs:
   build:
-    # `pr` as the first word after the phrase, and only that. Anything else
-    # is a question, answers read-only, and opens nothing.
-    #
     # This `if:` is a filter that saves booting a runner. The check is inside
     # the action: the commenter must have write access to this repo, and must
     # not be a bot. That matters more here than anywhere else, because this
     # run edits code with a token that can push.
     if: >-
-      contains(github.event.comment.body, '/fx') &&
+      (startsWith(github.event.comment.body, '/fx') || contains(github.event.comment.body, ' /fx')) &&
       github.event.comment.user.type != 'Bot'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -52,7 +50,4 @@ jobs:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
         with:
           model: anthropic/claude-sonnet-5
-          # `auto` — a plain question still answers read-only; only `/fx pr`
-          # gets the write tools.
-          mode: auto
           max_steps: '60'

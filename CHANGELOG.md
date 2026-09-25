@@ -8,6 +8,130 @@ break and how a release is cut.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-16
+
+The agent decides. `/fx pr` is gone as a phrase: a run in `agent` mode, the
+default, or in `answer` mode is the same agent with a shell, and in `agent`
+mode it opens a draft pull request when it judges a request is one it can do
+well in a single run, or leaves a note saying what it would change and what a
+stronger agent should pick up. `read` mode has no shell, as before.
+
+**The default changed under every job, on every event.** In 1.0.0 an unset
+`mode` was `auto`, which resolved to read unless the comment said `pr`, and
+`shell` defaulted to off, so a workflow written from `action.yml` ran notes
+and plain `/fx` questions with no shell; the shipped example set
+`shell: true`, so a workflow copied from it already had one on every run. Now
+an unset `mode` is `agent`: a shell, edits, and a draft pull request when the
+agent decides one is warranted. New for everyone is that a plain request can
+end in a pull request. New for a workflow that never set `shell` is the shell
+itself, which can read the runner's environment, gateway key included. The
+write-access check on the actor is unchanged, so who can reach a shell is who
+could already run `/fx pr`. Set `mode: read` for a run with no shell, or
+`mode: answer` for the shell with no pull request.
+
+**This release removes inputs, and moves `@v1` across that.** By the rules in
+`.claude/skills/release/SKILL.md` it is a MAJOR and would be 2.0.0. It ships
+as 1.1.0 on purpose: the action is a week old, its first release two days
+old, and still moving daily; the README, every example and the guide pin
+`@main`, seven pins in all; `@v1` is offered, in this file's header and in
+the guide, and nobody has taken it up, since every repository this action
+runs in rides `@main`. Nobody is holding the promise this breaks. If you did
+pin `@v1`, read Removed first: passing `shell` or `pr_model`, or `mode: auto`
+or `mode: write`, now fails the run on its first step and names the
+replacement, before anything is billed.
+
+### Changed
+
+- **An unset `mode` is `agent`, on every event.** It was `auto`, which was
+  read unless `pr` was typed. The paragraph above has the consequences.
+- **One agent, and the pull request is its call.** Every `agent` or `answer`
+  run has a shell and edits; `read` denies both. A question gets an answer;
+  "fix this" or "add that" gets the change, tested, as a draft pull request
+  when the agent judges it fits one run, and a note saying what it would
+  change and what a stronger agent should pick up when it does not. The
+  mechanics are the new `open-pr` skill: the agent writes `.agent-pr.md`,
+  title then body, and the action does the branch, push and draft PR. No
+  file, or an unchanged tree, and nothing opens. With `skills: false` the
+  prompt states that contract itself instead of naming a skill that is not
+  there. fx still never holds a GitHub token, and the `fx pr` drafting call
+  is gone.
+- **Each `/fx` comment gets its own reply**, keyed to the comment, rewritten
+  when the comment is edited; the workflow needs
+  `issue_comment: types: [created, edited]` for the edit half. An issue note
+  still refreshes in place.
+- **`examples/fx.yml` runs on `workflow_dispatch` too**, with an issue number
+  and a prompt: a run by hand on any issue, without commenting. In this
+  repository the workflow is `uses: ./`, so dispatching it from a branch is
+  how a change to the action is tried before it lands; a copy that pins
+  `@main` runs main's action whichever branch it is dispatched from.
+- **`compare-models` works without a shell**, fetching the catalog with the
+  web tool, and the dogfood run no longer copies the repo's own `skills/`
+  onto itself.
+- **Three modes, each one a step down**: `agent` ships, `answer` verifies and
+  never opens anything, `read` only reads. Two capabilities come apart, a
+  shell and a pull request, and three of the four combinations are worth
+  having.
+- **Two off switches for pull requests, at different levels.** `mode: answer`
+  means the agent is never told to ship: it still makes the change, to find
+  out whether it works, and reports what it found, but nothing is committed or
+  opened. `contents: read` on the job means it cannot
+  push whatever it decides: the work is discarded and the comment says so,
+  instead of a red step under an answer that says "shipped". A repo that never
+  wants a PR should set both.
+
+### Removed
+
+- Inputs `shell` and `pr_model`, and `mode` values `auto` and `write`. `mode`
+  is now `agent` (default), `answer` or `read`. **If you ran `mode: read` with
+  `shell: true`, use `mode: answer`**: that pair was the old scratch mode, and
+  `mode: read` alone now denies the shell, so a note would keep its shape and
+  quietly stop verifying anything. `read` stays the only mode that combines
+  with `allowed_non_write_users` or `allowed_bots` on issue and PR events.
+- **Passing any of them fails the run on its first step, with the migration in
+  the error.** GitHub only warns on an input an action does not declare, and a
+  warning on a green run is a line in a log nobody reads, so `shell` and
+  `pr_model` are still declared purely to refuse them — including
+  `shell: false`, whose migration is `mode: read` and not "drop the line".
+  The declared stubs go for good in 2.0.0.
+- `/fx pr` as the phrase that turned writing on. Nothing strips the word now:
+  `/fx pr add X` still runs, and the agent reads the request as `pr add X`.
+
+### Fixed
+
+- **A comment that was never addressed to the agent is a skip, not a red X.**
+  The workflow's `if:` is a substring test and the action's trigger match is a
+  whole word outside quoted lines, so the two can disagree and a correct
+  workflow lands in the gap — a comment merely mentioning a path like
+  `.github/fx/issue.md` was enough. Every failed run this action ever had on
+  its own repo, three of three, was that. It now warns, says how to tighten
+  the gate, and posts nothing. The shipped examples use the tighter gate:
+  `startsWith(body, '/fx') || contains(body, ' /fx')`.
+- **The push refuses to target the default branch.** It never did — the branch
+  name is built here — but that was an emergent property rather than an
+  asserted one, and a private repo on the free plan cannot have branch
+  protection to fall back on: GitHub answers 403 to both the
+  branch-protection and the ruleset APIs. Several of this action's consumers
+  are in that position and one deploys its default branch on push.
+- **A bot listed in `allowed_bots` no longer counts as write access on a
+  `schedule` or `workflow_dispatch` run**, so it cannot write the memory
+  branch that every later run reads. The memory half of that check hung off an
+  event switch that waves through everything which is not an issue or PR
+  event. A bot is still limited to `mode: read` only where its own text is the
+  instruction, since a scheduled prompt comes from the workflow.
+- Every write-mode prompt build had failed since 2026-09-11 on a broken
+  heredoc line, so `/fx pr` went red at "Build the prompt" with no comment
+  (#14). CI now builds the comment path in all three modes.
+- A `read` run is now told that the instructions below it may name commands it
+  cannot run, so a note says a claim is unverified rather than keeping the
+  shape of one that checked (#16).
+- The secret scrub on pull request text no longer depends on the drafting
+  call succeeding, and a scrub that fails stops the push (#15, first two
+  gaps).
+- In 1.0.0 the `fx usage` ledger reads after a memory compaction and after
+  opening a pull request ran inside steps that hold the job's token, so an fx
+  process had `GH_TOKEN` in its environment. A ledger read runs no tools, but the
+  rule is that no fx process holds one, and now none does.
+
 ## [1.0.0] - 2026-09-14
 
 First release. An agent on your issues: open one and [fx](https://fx.sh)
@@ -109,5 +233,6 @@ what changed.
   [`docs/agent-memory.md`](docs/agent-memory.md) as the surveys behind the
   choices.
 
-[Unreleased]: https://github.com/khalido/fx-agent-action/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/khalido/fx-agent-action/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/khalido/fx-agent-action/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/khalido/fx-agent-action/releases/tag/v1.0.0
