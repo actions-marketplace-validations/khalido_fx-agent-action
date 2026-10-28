@@ -530,7 +530,8 @@ its session. Rewrite a fact when it changes; do not add a dated one on top.
 
 **Sessions and spend**
 
-- **Session JSON is `execution.schema_version` 3**, per turn, on 0.0.14.
+- **Session JSON is `execution.schema_version` 3**, per turn, on 0.0.14
+  and 0.0.15 (whose "leaner session store" left the export unchanged).
   `--sessions-v2` is still opt-in (0.0.14 adds `fx --sessions-v2 sessions
   convert`); the action stays on the default
   until v2 is fx's default, so `session-html.py` migrates once.
