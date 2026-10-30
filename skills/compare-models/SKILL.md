@@ -41,8 +41,9 @@ run the repo's checks.
 **If asked to test**, keep it small and representative. One or two real
 prompts from this repo's own history, a past issue or a question someone
 asked, not a benchmark. fx is on this runner and the key is in the
-environment, so `FX_MODEL=<id> fx ask --json "<prompt>"` runs the candidate
-and `fx usage --json` has the spend. Cap yourself at a few cents per
+environment, so `fx ask --model <id> --json "<prompt>"` runs the candidate
+and its `usage` tokens times the gateway's list price (`/v1/models`) is the
+spend, at most; `fx usage --json` needs a paid gateway plan. Cap yourself at a few cents per
 candidate, and report tokens, seconds and cost from the run rather than
 impressions. These are usually flash-class models: a right answer in three
 seconds for half a cent beats a right answer in thirty for six.

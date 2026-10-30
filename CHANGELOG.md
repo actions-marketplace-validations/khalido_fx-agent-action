@@ -8,6 +8,126 @@ break and how a release is cut.
 
 ## [Unreleased]
 
+### Changed
+
+- The footer's cost is now a ceiling, marked `≤`, and `max_cost` compares
+  against it. fx 0.0.14 stopped keeping the per-generation ledger the exact
+  figure came from, so the action prices `fx ask`'s tokens at list price with
+  no cache discount: about 9× the real cost on the default model. Without
+  this, the footer showed no cost and 0 tokens on 0.0.14. Checked against
+  fx 0.0.14.
+- `max_cost` defaults to 5 instead of 1, since it now compares against that
+  ceiling: a 1M-token run on `anthropic/claude-sonnet-5` prices at about $3.
+- The default model is `deepseek/deepseek-v4.1-flash-1017`, DeepSeek's 17 October snapshot of
+  v4.1-flash: half the list price, and on a test question here it was right,
+  faster and caught a case the old one missed.
+- The Configure step also reads back `effort`, which `fx status` reports
+  since 0.0.14.
+- fx is downloaded on every run instead of cached. The cache never filled on
+  issue or comment runs, each of which logged a "Failed to save" warning, and
+  the download takes half a second (#26).
+
+- The thread shows each author's relation to the repo (OWNER, MEMBER,
+  CONTRIBUTOR, NONE…), and the agent is told not to fetch links posted by
+  anyone outside the repo unless the instruction asks. Web search and fetch
+  stay on in every mode.
+- Tighter writing rules in the base prompt: one term per thing, steps with
+  one action each and the condition first, no announcing labels ("Summary:"),
+  no retelling the issue to the people who wrote it, and a recommendation
+  first when someone has to decide. On two issues here, answers came out
+  10–18% shorter.
+- The setup line makes a key per repo with a $3 budget that resets weekly and
+  counts BYOK spend. A key made before this does not cap BYOK spend, and the
+  CLI cannot change that on an existing key: make a new one and reset the
+  `AI_GATEWAY_API_KEY` secret.
+
+## [1.3.0] - 2026-10-05
+
+Checked against fx 0.0.13.
+
+### Changed
+
+- The base prompt asks for the active voice, one point to a sentence, and a
+  numbered list for steps someone will follow.
+- When an answer is a sequence, a flow between parts or a set of states, the
+  agent may draw a small mermaid diagram, which GitHub renders, instead of
+  describing it. Only then, never as decoration.
+
+### Fixed
+
+- A correction to 1.2.0's notes: writing the shell rule under `bash` stopped
+  the auto review for plain commands, not for every command. fx still
+  reviews a pipe or an `&&` chain under an allow rule, one cheap call each.
+  The action cannot change that; AGENTS.md has the details.
+
+## [1.2.0] - 2026-10-01
+
+Checked against fx 0.0.11 and 0.0.12.
+
+### Added
+
+- `timeout_minutes`, default 10. Since 0.0.11 fx waits indefinitely for a
+  model endpoint it cannot reach, so a gateway outage ran until the job's own
+  limit, which cancels the job and posts nothing. Now the run fails and the
+  comment says why. The memory compaction gets five minutes. `triage.yml`'s
+  job limit goes from 10 to 15 minutes to stay above it.
+- `provider_order`, the gateway providers to try first. The action always
+  writes it, empty or not, because a checkout's `.fx.json` can set it too and
+  `fx status` does not report it.
+
+### Changed
+
+- Answers cite code as permalinks at the commit the agent read, and the
+  footer names that commit, so a line number in an old comment still points
+  at the right line.
+- Answers to a question have a ceiling, 250 words, and come in short
+  paragraphs with the answer on the first line.
+- The example workflow's `if:` (`examples/fx.yml`, the README) catches
+  `/fx` at the start of any line, not only the first, and on a private repo
+  leaves the author check to the action: `author_association` skipped an org
+  admin whose membership is private. Re-copy it, or make the same two edits.
+- `/fx` on a closed issue or pull request gets a line or two, unless the
+  comment asks for more. A closed thread usually wants "shipped in abc123",
+  not a fresh investigation.
+- The memory prompt keeps issue status and line numbers out of `MEMORY.md`:
+  the first goes stale when the issue closes, the second with every commit.
+
+### Fixed
+
+- A run that fails before fx does anything, a bad key or a spent gateway
+  budget, is red. It used to post fx's error line as the answer on a green
+  run. The log now shows fx's own error instead of "Error field: none".
+- The shell's allow rule never bound. fx keys it `bash`; the action wrote
+  `shell`, so in `agent` and `answer` mode every command went to fx's auto
+  reviewer, a billed call each that could also block it. Both keys are
+  written now: `bash` for the allow, `shell` so read mode still hides the
+  tool rather than refusing it after a wasted step.
+- Two runs saving memory at once no longer lose one run's lines (#10). The
+  save catches up with the branch and merges before it compacts, the merge
+  keeps both sides, and compaction keeps the file's order instead of
+  reversing it.
+- The footer's cost covers the whole run when it mixes billing: a
+  gateway-billed helper next to a BYOK model reported only the helper,
+  about a tenth of the real figure. Each generation is priced on its own
+  now. Part of #11; the cache split is still to come. When the gateway
+  cannot say, the `≈` estimate prices cache reads at their own rate, which
+  brought it from about 5× the real figure to under 2×.
+
+- The pull request push no longer runs the repository's own git hooks. A
+  pre-push hook wired through `core.hooksPath` ran the repo's full check under
+  the runner's Node and refused the push. The agent runs the checks before it
+  asks for a pull request, and CI runs them again on it.
+- When the agent asked for a pull request and none opened, the comment says
+  so above the answer. It used to post the agent's "shipped as a draft PR"
+  with nothing shipped.
+
+### Security
+
+- `MEMORY.md` is scrubbed for secrets before every push and after every
+  fetch, like the answer and the session (#15). It was the one published
+  path that skipped `redact.py`. Nothing was found on this repo's own
+  memory branch, all 23 commits scanned.
+
 ## [1.1.0] - 2026-09-16
 
 The agent decides. `/fx pr` is gone as a phrase: a run in `agent` mode, the
@@ -233,6 +353,8 @@ what changed.
   [`docs/agent-memory.md`](docs/agent-memory.md) as the surveys behind the
   choices.
 
-[Unreleased]: https://github.com/khalido/fx-agent-action/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/khalido/fx-agent-action/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/khalido/fx-agent-action/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/khalido/fx-agent-action/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/khalido/fx-agent-action/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/khalido/fx-agent-action/releases/tag/v1.0.0

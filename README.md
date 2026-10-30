@@ -25,10 +25,12 @@ jobs:
   fx:
     if: >-
       (github.event_name == 'issues' && github.event.issue.user.type != 'Bot' &&
-       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
-      || (github.event_name == 'issue_comment' && (startsWith(github.event.comment.body, '/fx') || contains(github.event.comment.body, ' /fx')) &&
+       (github.event.repository.private ||
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)))
+      || (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/fx') &&
           github.event.comment.user.type != 'Bot' &&
-          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+          (github.event.repository.private ||
+           contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
@@ -51,16 +53,16 @@ jobs:
 ```
 
 ```bash
-vercel ai-gateway api-keys create --name github-actions --limit 10 --refresh-period monthly
+vercel ai-gateway api-keys create --name fx-REPO --limit 3 --refresh-period weekly --include-byok
 gh secret set AI_GATEWAY_API_KEY
 gh api -X PUT repos/OWNER/REPO/actions/permissions/workflow \
   -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true
 ```
 
-That is the setup: an [AI Gateway](https://vercel.com/ai-gateway) key with
-its own budget, made with the [Vercel CLI](https://vercel.com/docs/cli), the
-secret, and the switch GitHub leaves off that lets a workflow open a pull
-request. `gh secret set` prompts for the key, which keeps it out of your shell
+That is the setup. The [Vercel CLI](https://vercel.com/docs/cli) makes an
+[AI Gateway](https://vercel.com/ai-gateway) key for this repo alone, with a
+$3 budget that resets every week. Then the secret, and the switch GitHub
+leaves off that lets a workflow open a pull request. `gh secret set` prompts for the key, which keeps it out of your shell
 history; a script or an agent doing this unattended passes `--body` or pipes it
 in. The same file with comments is [`examples/fx.yml`](examples/fx.yml);
 this repo runs it on itself. One job, one agent: a new issue gets a note,
@@ -166,7 +168,7 @@ All optional.
 |---|---|---|
 | `prompt` | the comment, or the built-in note on an issue event | What to ask. The thread is appended below it. |
 | `prompt_file` | | Instructions in a file in your repo. Wins over `prompt` and the built-in note when it exists. |
-| `model` | `deepseek/deepseek-v4.1-flash` | Any [AI Gateway model id](https://vercel.com/ai-gateway/models). |
+| `model` | `deepseek/deepseek-v4.1-flash-1017` | Any [AI Gateway model id](https://vercel.com/ai-gateway/models). |
 | `mode` | `agent` | What a run may do. `agent` ships: shell, edits, and a draft PR when it decides to. `answer` verifies: the same shell, nothing ever committed or opened. `read` only reads: no shell, no PR. |
 | `memory` | `true` | One `MEMORY.md` on an orphan branch, read before and pushed after each run. Your default branch is never touched. |
 | `memory_branch`, `memory_repo`, `memory_lines` | `agent-memory`, this repo, `80` | Where the memory lives and how long it may get. |
@@ -176,7 +178,9 @@ All optional.
 | `allowed_bots` | | Bots allowed to trigger, with or without `[bot]`, or `*`. |
 | `max_steps` | `30` | Cap on the tool loop. Set here, so a repo's `.fx.json` cannot raise it. |
 | `effort` | fx's `auto` | Reasoning effort, `low` to `max`, on models that have it. |
-| `max_cost` | `1` | Fail over this many dollars, after the fact. A PR the agent asked for still opens. |
+| `provider_order` | the gateway's choice | Up to 8 gateway providers to try first, e.g. `deepseek, fireworks`. |
+| `timeout_minutes` | `10` | Stop fx after this long, so an unreachable model still ends in a comment. Keep it under the job's `timeout-minutes`. |
+| `max_cost` | `5` | Fail when the footer's `≤` cost ceiling is over this many dollars, after the fact. The ceiling is several times the real cost. A PR the agent asked for still opens. |
 | `post` | `comment` | `none` leaves the answer on the `response` output. |
 | `comment_key` | | Keeps this job's comment apart from another fx job's. |
 | `session_artifact` | `true` | The run as one HTML file on the run page. |

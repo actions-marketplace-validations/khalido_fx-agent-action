@@ -64,32 +64,42 @@ previous=$(printf '%s' "$existing" | jq -r '.body // ""' 2>/dev/null \
   | sed -n 's/^<!-- fx-runs \(.*\) -->$/\1/p' | head -n1)
 [ -n "$previous" ] && printf '%s' "$previous" | jq -e 'type == "array"' >/dev/null 2>&1 || previous='[]'
 this_run=$(jq -nc --arg m "${MODEL:-}" --arg c "${COST:-}" --arg s "${DURATION:-}" \
-  --arg i "${IN_TOKENS:-}" --arg o "${OUT_TOKENS:-}" --arg u "$run_url" --arg mem "${MEMORY:-}" --arg est "${COST_ESTIMATED:-}" --arg p "${PROVIDERS:-}" \
+  --arg i "${IN_TOKENS:-}" --arg o "${OUT_TOKENS:-}" --arg u "$run_url" --arg mem "${MEMORY:-}" --arg est "${COST_ESTIMATED:-}" --arg p "${PROVIDERS:-}" --arg h "$(printf %.7s "${SHA:-}")" \
   '{m:$m, c:($c|tonumber? // null), s:($s|tonumber? // null), i:($i|tonumber? // null), o:($o|tonumber? // null), u:$u}
    + (if $mem == "updated" or $mem == "compacted" then {mem:$mem} else {} end)
    + (if $est == "true" then {est:true} else {} end)
-   + (if $p != "" then {p:$p} else {} end)')
+   + (if $p != "" then {p:$p} else {} end)
+   + (if $h != "" then {h:$h} else {} end)')
 runs=$(printf '%s' "$previous" | jq -c --argjson r "$this_run" '. + [$r] | .[-6:]')
 
 # Cents with one decimal; dollars from $1. Tokens in k from a thousand.
 footer=$(printf '%s' "$runs" | jq -r '
   def cents: if . == null then "?" elif . >= 1 then "$" + (. * 100 | round / 100 | tostring) else ((. * 1000 | round) / 10 | tostring) + "¢" end;
-  # ≈ when the figure is a list-price estimate (BYOK: the gateway bills nothing).
-  def costof: (if .est == true then "≈" else "" end) + (.c | cents);
-  # who served it, when the gateway told us (BYOK runs); the quality varies by provider.
+  # ≤ when the figure is a list-price ceiling, which every run is since fx 0.0.14.
+  def costof: (if .est == true then "≤" else "" end) + (.c | cents);
+  # who served it, from resolved_provider in fx ask --json; the quality varies by provider.
   def via: if (.p // "") != "" then " via " + .p else "" end;
   def k: if . == null then "?" elif . >= 1000 then ((. / 100 | round) / 10 | tostring) + "k" else tostring end;
   def secs: if . == null then "" else " · " + (tostring) + "s" end;
+  # the commit the answer read, so its line numbers can be dated.
+  def at: if (.h // "") != "" then " · at `" + .h + "`" else "" end;
   def mem: if .mem == "updated" then " · memory updated" elif .mem == "compacted" then " · memory compacted" else "" end;
   (.[-1]) as $n
-  | ["[fx](https://fx.sh) `\($n.m)`\($n | via) · \($n.i | k) in / \($n.o | k) out · \($n | costof)\($n.s | secs)\($n | mem) · [run](\($n.u))"]
+  | ["[fx](https://fx.sh) `\($n.m)`\($n | via) · \($n.i | k) in / \($n.o | k) out · \($n | costof)\($n.s | secs)\($n | at)\($n | mem) · [run](\($n.u))"]
   + [ .[:-1] | reverse | .[] | "earlier · \(costof)\(.s | secs) · [run](\(.u))" ]
-  + (if length > 1 then ["\(length) runs · \(if any(.[]; .est == true) then "≈" else "" end)\([.[].c | select(. != null)] | add | cents) total"] else [] end)
+  + (if length > 1 then ["\(length) runs · \(if any(.[]; .est == true) then "≤" else "" end)\([.[].c | select(. != null)] | add | cents) total"] else [] end)
   | .[]')
 
 {
   printf '%s\n' "$MARKER"
   printf '<!-- fx-runs %s -->\n' "$runs"
+  # Above the answer, because the answer was written before the push and
+  # already says the change shipped.
+  if [ "${PR_OUTCOME:-}" = "failure" ]; then
+    printf '**No pull request was opened.** The agent asked for one, but pushing the branch or opening it failed; the [log](%s) says why, and the change below exists nowhere.\n\n' "$run_url"
+  elif [ "${PR_UNPUSHED:-}" = "true" ]; then
+    printf '**No pull request was opened.** The agent asked for one, but this job cannot push a branch, so the change below was not kept. Give the job `contents: write` if it should be able to.\n\n'
+  fi
   if [ -n "${RESPONSE_PATH:-}" ] && [ -s "${RESPONSE_PATH:-}" ]; then
     if [ "$(wc -c < "$RESPONSE_PATH")" -gt "$LIMIT" ]; then
       head -c "$LIMIT" "$RESPONSE_PATH"
@@ -101,7 +111,6 @@ footer=$(printf '%s' "$runs" | jq -r '
     printf 'The run failed before there was an answer. The [log](%s) says why.\n' "$run_url"
   fi
   [ -n "${PR_URL:-}" ] && printf '\n\nOpened %s — nobody has reviewed it yet.\n' "$PR_URL"
-  [ "${PR_UNPUSHED:-}" = "true" ] && printf '\n\n*The agent asked for a pull request, but this job cannot push a branch. Its edits were not kept; give the job `contents: write` if it should be able to.*\n'
   [ "${RUN_FAILED:-success}" = "failure" ] && printf '\n\n*The run itself failed; the answer above may be partial.*\n'
   printf '\n\n---\n%s\n' "$footer"
 } > "$body"

@@ -36,9 +36,9 @@ inputs:
     required: false
     default: ''
   model:
-    description: Any AI Gateway model id, e.g. `deepseek/deepseek-v4.1-flash`, `zai/glm-5.3-flash`, `anthropic/claude-sonnet-5`.
+    description: Any AI Gateway model id, e.g. `deepseek/deepseek-v4.1-flash-1017`, `zai/glm-5.3-flash`, `anthropic/claude-sonnet-5`.
     required: false
-    default: deepseek/deepseek-v4.1-flash
+    default: deepseek/deepseek-v4.1-flash-1017
   mode:
     description: >-
       What this job's runs may do. `agent` (default) ships: it reads,
@@ -148,6 +148,23 @@ inputs:
       lever on a note that comes out shallow.
     required: false
     default: ''
+  provider_order:
+    description: >-
+      Gateway providers to try first for the model, up to 8 comma-separated
+      slugs as the gateway spells them (`deepseek, fireworks`), then its default
+      routing. Empty is the gateway's own choice. Set here either way, so a
+      repo's `.fx.json` cannot route the run.
+    required: false
+    default: ''
+  timeout_minutes:
+    description: >-
+      Stop fx after this many minutes and report the run as failed. fx waits
+      indefinitely for a model endpoint it cannot reach, so without this an
+      outage runs until the job's own limit, which cancels the job and posts
+      nothing. Keep it a few minutes under the job's `timeout-minutes`, which
+      also covers installing fx.
+    required: false
+    default: '10'
   post:
     description: >-
       `comment` (default) posts the answer on the triggering issue or PR,
@@ -178,14 +195,15 @@ inputs:
     default: 'true'
   max_cost:
     description: >-
-      Fail the step when the run costs more than this many US dollars. A
-      tripwire, not a brake. The real brake is a budget on the AI Gateway key
-      itself (`vercel ai-gateway api-keys create --limit 10`), which the
+      Fail the step when the run's cost ceiling (the footer's `≤` figure,
+      list price with no cache discount, several times the real cost) is
+      over this many US dollars. A tripwire, not a brake. The real brake is a budget on the AI Gateway key
+      itself (`vercel ai-gateway api-keys create --limit 3 --refresh-period weekly`), which the
       gateway enforces with a 402. 0 disables it. A run that trips it after
       asking for a pull request still gets one: the work is done and throwing
       it away helps nobody.
     required: false
-    default: '1'
+    default: '5'
   github_token:
     description: >-
       Defaults to the workflow's own token, which posts as github-actions[bot].
@@ -315,47 +333,15 @@ runs:
 
     # fx ships weekly and there is no version input on purpose: pinning an
     # agent to an old release ages badly, and the whole value here is that fx
-    # keeps getting better. The tag is resolved only to key the cache.
-    - name: Resolve the fx version
-      id: version
-      shell: bash
-      run: |
-        set -euo pipefail
-        # The same file setup.sh reads, so the cache key and the binary it
-        # installs name the same release even if one lands mid-run.
-        tag=$(curl -fsSL https://releases.fx.sh/latest.txt 2>/dev/null | tr -d '[:space:]' || true)
-        case "$tag" in v[0-9]*) ;; *) tag='' ;; esac
-        # actions/cache never overwrites an existing key, so a FIXED fallback
-        # would pin whatever binary happened to be cached the day the API was
-        # rate-limited, forever. A dated one self-heals the next day.
-        echo "tag=${tag:-unresolved-$(date -u +%Y-%m-%d)}" >> "$GITHUB_OUTPUT"
-
-    # fx is a single static binary, so caching it turns a download into a
-    # restore. Keyed on the resolved tag, so a new release busts it.
-    - name: Restore fx from the cache
-      id: cache
-      uses: actions/cache@v6
-      with:
-        path: ~/.local/bin/fx
-        key: fx-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.tag }}
-
-    # The resolved tag is passed through when there is one, so the installed
-    # binary is the one the cache key names. Without a tag, latest.
+    # keeps getting better. No cache either: the download takes half a second,
+    # and issue and comment runs cannot save a cache anyway (#26).
     - name: Install fx
-      if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
-      env:
-        TAG: ${{ steps.version.outputs.tag }}
-      run: |
-        set -euo pipefail
-        case "$TAG" in
-          v[0-9]*) curl -fsSL https://fx.sh/setup.sh | bash -s -- "$TAG" ;;
-          *)       curl -fsSL https://fx.sh/setup.sh | bash ;;
-        esac
+      run: curl -fsSL https://fx.sh/setup.sh | bash
 
     # FX_AUTO_UPGRADE=0: fx checks for a newer release on start and can
-    # install it in place. In CI that is a second download of a binary we just
-    # restored from cache, and a run that does not match the version it logged.
+    # install it in place. In CI that is a second download, and a run that
+    # does not match the version it logged.
     - name: Put fx on PATH
       shell: bash
       run: |
@@ -430,14 +416,24 @@ runs:
     # written here outranks it (verified: a repo file saying 7 steps loses to
     # 30 in this file), so the three are set explicitly rather than left to
     # whatever branch is checked out. model and permission_mode in a repo file
-    # are refused by fx itself.
+    # are refused by fx itself. It can also set provider_order and
+    # provider_strict, which fx status does not report, so both are always
+    # written here: an empty list in this file clears the checkout's (tested
+    # on 0.0.11, a repo file restricting to a provider that does not exist
+    # fails the run without it).
     #
     # Then two assertions. A settings file fx cannot parse is dropped WHOLE,
     # silently, and the run continues on defaults: auto mode, no deny rules,
     # fx's own default model. So the rules and the mode are read back before
     # anything runs. Rule KEYS are not validated by fx — a misspelled one is
     # stored and echoed — so the read-back proves the file parsed, not that the
-    # names are the right ones; `edit` and `shell` are the two measured to bind.
+    # names are the right ones.
+    #
+    # The shell needs TWO keys, measured on 0.0.11: an allow binds under
+    # `bash` and not under `shell` (with `shell` alone every command went to
+    # the auto reviewer, a billed call that can block it), and a deny hides
+    # the tool under `shell` but under `bash` only refuses the call after the
+    # model has tried it. So both keys, always the same action.
     - name: Configure fx
       id: configure
       if: ${{ steps.context.outputs.skip == '' }}
@@ -447,23 +443,33 @@ runs:
         MODEL: ${{ inputs.model }}
         MAX_STEPS: ${{ inputs.max_steps }}
         EFFORT: ${{ inputs.effort }}
+        PROVIDER_ORDER: ${{ inputs.provider_order }}
       run: |
         set -euo pipefail
         mkdir -p "$HOME/.fx"
         steps="${MAX_STEPS:-30}"
         echo "model=$MODEL" >> "$GITHUB_OUTPUT"
         tool_rule=allow; [ "$MODE" = "read" ] && tool_rule=deny
-        jq -n --arg model "$MODEL" --argjson steps "$steps" --arg effort "$EFFORT" --arg r "$tool_rule" \
+        # Validated here because fx drops a settings file it cannot parse
+        # whole, and provider_order is not in the read-back below.
+        providers=$(jq -nc --arg p "$PROVIDER_ORDER" '$p | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(. != ""))')
+        printf '%s' "$providers" | jq -e 'length <= 8 and all(test("^[A-Za-z0-9-]+$"))' >/dev/null \
+          || { echo "::error::provider_order takes up to 8 gateway provider slugs, letters, digits and dashes (got '$PROVIDER_ORDER')." >&2; exit 1; }
+        jq -n --arg model "$MODEL" --argjson steps "$steps" --arg effort "$EFFORT" --arg r "$tool_rule" --argjson po "$providers" \
           '{models:{gateway:$model}, max_agent_steps:$steps, max_tool_result_bytes:65536, context:true,
-            permission_mode:"auto", permission:{edit:{"*":$r}, shell:{"*":$r}}}
+            provider_order:$po, provider_strict:false,
+            permission_mode:"auto", permission:{edit:{"*":$r}, bash:{"*":$r}, shell:{"*":$r}}}
            + (if $effort != "" then {effort:$effort} else {} end)' > "$HOME/.fx/settings.json"
 
         rules=$(fx permissions --json 2>/dev/null | jq -c '[.rules[] | "\(.permission)=\(.action)"]')
-        status=$(fx status --json 2>/dev/null | jq -r '"\(.permission_mode) \(.model) \(.agent_step_limit)"')
+        # Effort is reported since 0.0.14, echoed unvalidated like the rule keys,
+        # so this proves fx read it, not that the level exists.
+        status=$(fx status --json 2>/dev/null | jq -r '"\(.permission_mode) \(.model) \(.agent_step_limit) \(.effort)"')
+        want="auto $MODEL $steps ${EFFORT:-auto}"
         echo "fx configured: $MODE mode; rules $rules; status: $status" >&2
-        [ "$status" = "auto $MODEL $steps" ] \
-          || { echo "::error::fx did not take the settings written for it (wanted 'auto $MODEL $steps', got '$status'). The settings file may be malformed; nothing ran." >&2; exit 1; }
-        printf '%s' "$rules" | jq -e --arg r "$tool_rule" 'index("edit=\($r)") != null and index("shell=\($r)") != null' >/dev/null \
+        [ "$status" = "$want" ] \
+          || { echo "::error::fx did not take the settings written for it (wanted '$want', got '$status'). The settings file may be malformed; nothing ran." >&2; exit 1; }
+        printf '%s' "$rules" | jq -e --arg r "$tool_rule" 'index("edit=\($r)") != null and index("bash=\($r)") != null and index("shell=\($r)") != null' >/dev/null \
           || { echo "::error::$MODE-mode permission rules did not register: $rules" >&2; exit 1; }
         fx doctor --json 2>/dev/null | jq -r '"fx doctor: \(.ok_count) ok, \(.warn_count) warn, \(.fail_count) fail; " + ([.checks[] | select(.status != "ok") | "\(.name): \(.detail)"] | join("; "))' >&2 || true
 
@@ -552,6 +558,7 @@ runs:
       env:
         PROMPT_PATH: ${{ steps.context.outputs.prompt_path }}
         MAX_COST: ${{ inputs.max_cost }}
+        TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
       run: bash "${{ github.action_path }}/scripts/run-fx.sh"
 
     # Inline, not a script: a script here would be read from the directory it
@@ -636,11 +643,10 @@ runs:
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       run: bash "${{ github.action_path }}/scripts/open-pr.sh"
 
-    # After the PR, so a compaction's spend is in the ledger before the footer
-    # reads it; gated on the integrity check like everything that holds a
-    # token; never fails the run. And only when the actor has write access:
-    # an allowed stranger's or bot's run reads the memory and cannot change
-    # what future runs read. Deterministic, in the workflow, not the prompt.
+    # After the PR, so a compaction's cost is in the footer; gated on the
+    # integrity check like everything that holds a token; never fails the run.
+    # And only when the actor has write access: an allowed stranger's or bot's
+    # run reads the memory and cannot change what future runs read. Deterministic, in the workflow, not the prompt.
     - name: Save memory
       id: memory_save
       if: ${{ !cancelled() && steps.integrity.outcome != 'failure' && steps.context.outputs.skip == '' && steps.memory.outputs.memory_path != '' && steps.actor.outputs.write_access == 'true' }}
@@ -674,8 +680,10 @@ runs:
         OUT_TOKENS: ${{ steps.run.outputs.output_tokens }}
         PR_URL: ${{ steps.pr.outputs.pr_url }}
         PR_UNPUSHED: ${{ steps.pr.outputs.pr_unpushed }}
+        PR_OUTCOME: ${{ steps.pr.outcome }}
         RUN_FAILED: ${{ steps.run.outcome }}
         MEMORY: ${{ steps.memory_save.outputs.memory }}
+        SHA: ${{ steps.context.outputs.sha }}
       run: bash "${{ github.action_path }}/scripts/post-comment.sh"
 
     - name: Take the reaction back off

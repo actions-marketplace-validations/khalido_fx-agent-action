@@ -15,13 +15,31 @@ out="$RUNNER_TEMP/fx-result.json"
 response_path="$RUNNER_TEMP/fx-response.md"
 started=$(date +%s)
 
+# A time limit, because since 0.0.11 fx waits indefinitely for a model
+# endpoint it cannot reach, printing "waiting for connection" every few
+# seconds. Measured against a dead endpoint: no JSON, no exit. Without this a
+# gateway outage runs to the job's timeout, which CANCELS the job, and a
+# cancelled job posts no comment. `timeout` is GNU; a runner without it goes
+# without, and the job's own limit is the backstop.
+minutes="${TIMEOUT_MINUTES:-10}"
+limit=()
+if [ "$minutes" != "0" ] && command -v timeout >/dev/null; then
+  limit=(timeout -k 30 "${minutes}m")
+fi
+
 set +e
 # Not --no-save: the saved session is what the HTML artifact is rendered from,
 # and the runner is thrown away at the end of the job anyway.
-fx ask --json --no-color < "$PROMPT_PATH" > "$out" 2>"$RUNNER_TEMP/fx-stderr.log"
+${limit[@]+"${limit[@]}"} fx ask --json --no-color < "$PROMPT_PATH" > "$out" 2>"$RUNNER_TEMP/fx-stderr.log"
 fx_status=$?
 set -e
 duration=$(( $(date +%s) - started ))
+
+if [ "$fx_status" = 124 ] || [ "$fx_status" = 137 ]; then
+  echo "::error::fx did not finish within $minutes minutes (timeout_minutes). If its log below says it is waiting for a connection, the model endpoint was unreachable." >&2
+  tail -5 "$RUNNER_TEMP/fx-stderr.log" >&2 || true
+  exit 1
+fi
 
 if [ ! -s "$out" ]; then
   echo "::error::fx produced no output (exit $fx_status). Last lines of its log:" >&2
@@ -36,41 +54,40 @@ steps=$(jq -r '.steps // 0' "$out")
 in_tokens=$(jq -r '.usage.input_tokens // 0' "$out")
 out_tokens=$(jq -r '.usage.output_tokens // 0' "$out")
 
+# Failed with no step taken and no final answer: the request never got going
+# — a bad key, a 402 from the gateway budget. `output` then holds fx's error
+# line (`.error` stays null), which is not an answer, so fail here, before
+# response_path is set, and the comment says the run failed.
+if [ "$exit_code" != "0" ] && [ "$steps" = "0" ] && [ -z "$(jq -r '.final_output // ""' "$out")" ]; then
+  echo "::error::fx failed before doing anything: $(jq -r '.output // ""' "$out" | head -1)" >&2
+  exit 1
+fi
+
 # `final_output` is empty when the run ended before the model finished — a step
 # cap, a denied tool it could not work around, a provider error. Fall back to
 # the accumulated output so the comment says something rather than nothing.
 jq -r 'if (.final_output // "") != "" then .final_output else (.output // "") end' "$out" > "$response_path"
 
 if [ ! -s "$response_path" ]; then
-  echo "::error::fx returned no answer (exit_code $exit_code). Error field: $(jq -r '.error // "none"' "$out")" >&2
+  # fx leaves `.error` null on a failed request and puts the reason, "HTTP 401"
+  # and the like, on stderr only, so the log is what says why.
+  echo "::error::fx returned no answer (exit_code $exit_code). $(jq -r '.error // empty' "$out") Last lines of its log:" >&2
+  tail -5 "$RUNNER_TEMP/fx-stderr.log" >&2 || true
   exit 1
 fi
 
 # Scrub secrets out of the answer, here, once, before anything downstream reads
 # the file. See scripts/redact.py for why this is not covered by GitHub's log
 # masking.
-python3 -c "import sys; sys.path.insert(0, '$(dirname "$0")'); import redact; \
-  found = redact.redact_file(sys.argv[1]); \
-  [print(f'::warning::Removed {n} from the agent answer before posting it.') for n in found]" \
-  "$response_path"
+python3 "$(dirname "$0")/redact.py" "$response_path" "the agent answer"
 
-# `fx ask --json` reports tokens but no price. `fx usage` does report dollars —
-# it keeps a local ledger — and the runner's HOME is new every job, so the only
-# spend in it is this run's. That is where the footer's figure comes from.
-# Tokens from the same ledger, when it has them: `fx ask` counts only the
-# main agent, while the ledger includes helper models and provider tools,
-# which is what the dollars cover. One source for both numbers in the footer.
-usage=$(fx usage --json 2>/dev/null || true)
-# cost.sh: the ledger's dollars, or a list-price estimate from tokens when the
-# ledger says zero (a BYOK key). Prints cost= and cost_estimated= lines.
-cost_lines=$(bash "$(dirname "$0")/cost.sh" 2>/dev/null || true)
+# `fx ask --json` reports tokens but no price, so cost.sh prices them at list:
+# a ceiling, since the tokens come without their cache-read share. Prints
+# cost=, cost_estimated= and providers= lines.
+cost_lines=$(bash "$(dirname "$0")/cost.sh" "$out" 2>/dev/null || true)
 cost=$(printf '%s\n' "$cost_lines" | sed -n 's/^cost=//p')
 cost_estimated=$(printf '%s\n' "$cost_lines" | sed -n 's/^cost_estimated=//p')
 providers=$(printf '%s\n' "$cost_lines" | sed -n 's/^providers=//p')
-ledger_in=$(printf '%s' "$usage" | jq -r '.totals.input_tokens // empty' 2>/dev/null || true)
-ledger_out=$(printf '%s' "$usage" | jq -r '.totals.output_tokens // empty' 2>/dev/null || true)
-[ -n "$ledger_in" ] && in_tokens="$ledger_in"
-[ -n "$ledger_out" ] && out_tokens="$ledger_out"
 fx_version=$(fx --version 2>/dev/null | head -1 || echo unknown)
 
 # A random delimiter, not a fixed one. The payload is model output: with a fixed

@@ -11,7 +11,7 @@ Working on the action itself is a different job; that is [`AGENTS.md`](../AGENTS
    every event. A no fails the run before anything else happens.
 2. **Reacts** with 👀 on the comment, or on the issue when an issue opening or
    edit is the trigger. Taken off at the end.
-3. **Installs fx**, the latest release, cached by version.
+3. **Installs fx**, the latest release.
 4. **Builds the prompt**: the base block, the instruction, then the thread as
    evidence with hidden markup stripped.
 5. **Configures fx** from one settings file, then reads the settings back and
@@ -179,9 +179,11 @@ rather than skipping it, so a misconfigured workflow is visible:
   without the `[bot]` suffix, or `*`, and on issue and PR events the same
   read-only restriction applies. This is what stops two bots looping.
 
-Keep the `if:` on the job as well. `author_association` in it saves booting a
-runner for a stranger's `/fx`, but `MEMBER` means org member, not write
-access, so it is a filter and not the check.
+Keep the `if:` on the job as well, as a filter that saves booting a runner;
+the action's write check is the real one. On a public repo the filter is
+`author_association`, which skips a stranger's `/fx`. On a private repo the
+example drops it, because it misses an org member whose membership is
+private, and everyone who can comment there already has access.
 
 ## Pull requests
 
@@ -230,37 +232,43 @@ The App is yours. I don't want the ability to mint tokens into your repo.
 ## Cost
 
 Everything bills to your [AI Gateway](https://vercel.com/ai-gateway) key,
-web search included. Give the key its own budget when you create it; the
-gateway enforces that, and `max_cost` only notices after the fact.
+web search included. Give each repo its own key with a budget that resets
+weekly; the gateway enforces it, and `max_cost` only notices after the fact.
 
 ```bash
-vercel ai-gateway api-keys create --name github-actions --limit 10 --refresh-period monthly
+vercel ai-gateway api-keys create --name fx-REPO --limit 3 --refresh-period weekly --include-byok
 ```
 
-The footer on every comment has the model, tokens in and out, the cost in
-cents and the seconds, from fx's own ledger. That ledger is per machine and
-the numbers assume a fresh HOME every job, which GitHub-hosted runners give
-you. On a self-hosted runner with a persistent HOME the figures and
-`max_cost` become cumulative; give each job its own HOME there. A comment that gets rewritten
-stacks its earlier runs underneath and a total. The script does the adding.
+Runs on this repo cost under 5¢ each on `deepseek/deepseek-v4.1-flash`, and
+the default is now its `-1017` snapshot at half the price, so
+$3 covers 60 or more a week. A week is short enough that a runaway loop or a
+leaked key costs one week's budget. `--include-byok` counts calls on your own
+provider keys against it too. A key per repo shows which repo spent what.
+
+The footer on every comment has the model, the provider that served it
+(`via deepseek`), tokens in and out, the cost in cents and the seconds. The
+cost is a ceiling, marked `≤`: fx reports the run's tokens but not how many
+were cache reads, so the action prices all input at the full list rate. On
+DeepSeek flash, where most input is cached, that is about 10× the real
+figure, and `max_cost` compares against it. The gateway key's budget
+is the real number. The tokens are the main agent's; the auto reviewer and
+web search are not in them. A comment that gets rewritten stacks its earlier
+runs underneath and a total. The script does the adding.
 
 If you add your own provider key to the gateway (BYOK), the gateway bills
-nothing for those calls, so your gateway budget no longer caps that model's
-spend; the provider's own account does. fx's ledger then records zero, so
-the action asks the gateway for its record of each generation in the run and
-sums the provider's real charge instead, peak pricing included, and the
-footer names the provider that served the run (`via deepseek`). Only if
-those lookups fail does it fall back to a list-price estimate from the
-tokens, marked `≈`.
+nothing for those calls, so a key made without `--include-byok` no longer
+caps that model's spend; the provider's own account does.
 
 Speed varies with who serves the model. The gateway routes a request for
-`deepseek/deepseek-v4.1-flash` to any of nine providers at different prices
-and speeds, and fx exposes no way to pin one. What does pin it: add your own
-DeepSeek API key to the gateway as BYOK, which the gateway then uses first for
-that provider, with fallback to the pool. DeepSeek's own endpoint has peak
-pricing, double between 01:00 and 04:00 and 06:00 and 10:00 UTC on weekdays.
+`deepseek/deepseek-v4.1-flash-1017` to any of a dozen or more providers at
+different prices and speeds. `provider_order: deepseek, fireworks` tries
+those first, then the pool; the slugs are on the gateway's models page. A
+repo's `.fx.json` cannot change this, because the action always writes it.
+BYOK also pins: add your own DeepSeek API key to the gateway and it uses that
+provider first. DeepSeek's own endpoint has peak pricing, double between 01:00
+and 04:00 and 06:00 and 10:00 UTC on weekdays.
 
-Model choice is one input. `deepseek/deepseek-v4.1-flash` is the default; a
+Model choice is one input. `deepseek/deepseek-v4.1-flash-1017` is the default; a
 note runs a few cents, a question about the same, and a change that ends in
 a pull request more, since it runs the tests too. `effort` passes a reasoning
 effort to models that take one. `max_steps` caps the tool loop and is set in
@@ -280,6 +288,11 @@ Things that fail on the first day:
   `author_association` and the bot condition there.
 - **`prompt_file not found`** with no fallback. The path is relative to the
   checkout; the built-in note only fills in on `issues` events.
+- **`fx failed before doing anything`** with `HTTP 401` or `402`. The
+  gateway key is wrong, or its budget is spent.
+- **`fx did not finish within 10 minutes`**. fx waits for a model endpoint it
+  cannot reach rather than giving up, so an outage ends here. Rerun later, or
+  raise `timeout_minutes` if the job was genuinely long.
 - **`model_not_found`** from the gateway. The model id left the catalog, which
   preview ids do. Check <https://ai-gateway.vercel.sh/v1/models>.
 - **PR push fine, PR creation 403.** The repo or org setting above.
@@ -308,7 +321,9 @@ Things that fail on the first day:
 - **Read mode can reach the web.** Search and fetch are on, so an injected
   thread that steers the agent could read a file and send it out in a URL.
   The write-access check is the control; only people who could already read
-  the repo can start a run.
+  the repo can start a run. The thread labels each author's relation to the
+  repo, and the agent is told not to fetch links from anyone outside it
+  unless the instruction asks.
 - **The agent reads your `AGENTS.md` and sees every skill in the repo**, as
   above, and on a PR that is the PR's copy. The pr-review example skips forks
   for this reason.
@@ -336,6 +351,6 @@ For one repo, maybe not:
 
 [`examples/minimal-no-action.yml`](../examples/minimal-no-action.yml) is that,
 finished. The action adds what you would otherwise paste into every repo: the
-actor checks, one comment instead of a pile, a cached binary, the draft pull
+actor checks, one comment instead of a pile, the draft pull
 request from what the agent changed, the thread and diff with hidden markup
 stripped, the built-in note, and the session to read when it goes wrong.

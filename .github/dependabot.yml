@@ -7,6 +7,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # A release younger than three days is not offered: supply-chain worms
+    # ship as fresh releases.
+    cooldown:
+      default-days: 3
     groups:
       actions:
         patterns: ['*']
